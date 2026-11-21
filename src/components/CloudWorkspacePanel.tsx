@@ -4,6 +4,7 @@ import {
   putSignedUpload,
   workspaceApi,
   type AuthSession,
+  type AnalysisJob,
   type WorkspaceProject,
   type WorkspaceUser,
 } from '../services/workspaceApi';
@@ -33,6 +34,8 @@ export function CloudWorkspacePanel() {
   const [mode, setMode] = useState<'login' | 'register'>('register');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [uploadedAssetId, setUploadedAssetId] = useState<string | null>(null);
+  const [analysisJob, setAnalysisJob] = useState<AnalysisJob | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -62,6 +65,29 @@ export function CloudWorkspacePanel() {
     });
     return () => { active = false; };
   }, [session]);
+
+
+  useEffect(() => {
+    const token = session?.access_token;
+    const analysisId = analysisJob?.analysis_id;
+    if (!token || !analysisId || ['completed', 'failed', 'cancelled'].includes(analysisJob?.status || '')) return;
+    let active = true;
+    let timer: number | undefined;
+    const poll = async () => {
+      try {
+        const latest = await workspaceApi.analysisStatus(token, analysisId);
+        if (!active) return;
+        setAnalysisJob(latest);
+        if (!['completed', 'failed', 'cancelled'].includes(latest.status)) timer = window.setTimeout(poll, 2000);
+      } catch (reason) {
+        if (!active) return;
+        setError(reason instanceof Error ? reason.message : 'Could not refresh analysis status.');
+        timer = window.setTimeout(poll, 5000);
+      }
+    };
+    timer = window.setTimeout(poll, 1200);
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); };
+  }, [session?.access_token, analysisJob?.analysis_id, analysisJob?.status]);
 
   const saveSession = (next: AuthSession) => {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
@@ -115,6 +141,8 @@ export function CloudWorkspacePanel() {
       await putSignedUpload(intent.upload_url, file, intent.required_headers, setProgress);
       const completed = await workspaceApi.completeUpload(session.access_token, intent.media_asset_id);
       setProgress(100);
+      setUploadedAssetId(completed.media_asset_id);
+      setAnalysisJob(null);
       setMessage(`${file.name} uploaded and verified (${(completed.size_bytes / 1024 / 1024).toFixed(1)} MB).`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Upload failed.');
@@ -123,12 +151,26 @@ export function CloudWorkspacePanel() {
     }
   };
 
+
+  const startAnalysis = async () => {
+    if (!session || !uploadedAssetId) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const job = await workspaceApi.createAnalysisJob(session.access_token, uploadedAssetId);
+      setAnalysisJob(job); setMessage('Video queued for AI analysis.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not start AI analysis.');
+    } finally { setBusy(false); }
+  };
+
   const signOut = () => {
     sessionStorage.removeItem(SESSION_KEY);
     setSession(null);
     setUser(null);
     setProjects([]);
     setSelectedProject('');
+    setUploadedAssetId(null);
+    setAnalysisJob(null);
     setMessage('Signed out.');
     setError('');
   };
@@ -210,7 +252,23 @@ export function CloudWorkspacePanel() {
                     }} />
                   </label>
                   {!selectedProject && <small>Create or select a project first.</small>}
-                  {progress !== null && <div className="cloud-workspace-progress"><span style={{ width: `${progress}%` }} /></div>}
+                  {progress !== null && <div className="cloud-workspace-progress"><span style={{ width: String(progress) + '%' }} /></div>}
+                  {uploadedAssetId && (
+                    <div className="cloud-workspace-analysis">
+                      <button className="cloud-workspace-primary" disabled={busy || Boolean(analysisJob && !['failed', 'cancelled'].includes(analysisJob.status))} onClick={() => void startAnalysis()} type="button">
+                        {analysisJob && !['failed', 'cancelled'].includes(analysisJob.status) ? 'Analysis running…' : 'Start AI analysis'}
+                      </button>
+                      {analysisJob && (
+                        <>
+                          <strong>{analysisJob.status.replaceAll('_', ' ')}</strong>
+                          <span>{analysisJob.detail || (analysisJob.status === 'completed' ? 'Analysis complete.' : 'Preparing analysis worker…')}</span>
+                          <div className="cloud-workspace-progress"><span style={{ width: String(Math.max(0, Math.min(100, analysisJob.progress))) + '%' }} /></div>
+                          {analysisJob.result?.clips && <small>{analysisJob.result.clips.length} clip candidates found.</small>}
+                          {analysisJob.error && <small>{analysisJob.error}</small>}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

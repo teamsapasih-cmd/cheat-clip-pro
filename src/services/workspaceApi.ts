@@ -81,6 +81,13 @@ export const workspaceApi = {
       token,
       { method: 'POST' },
     ),
+  createAnalysisJob: (token: string, mediaAssetId: string) =>
+    request<AnalysisJob>('/api/analyses', token, {
+      method: 'POST',
+      body: JSON.stringify({ media_asset_id: mediaAssetId, provider: 'gemini', duration: 'auto', transcript_language: 'id' }),
+    }),
+  analysisStatus: (token: string, analysisId: string) =>
+    request<AnalysisJob>(`/api/analyses/${encodeURIComponent(analysisId)}`, token),
 };
 
 export async function putSignedUpload(
@@ -104,4 +111,15 @@ export async function putSignedUpload(
     xhr.onabort = () => reject(new Error('Upload was cancelled.'));
     xhr.send(file);
   });
+}
+
+export interface AnalysisJob {
+  analysis_id: string;
+  job_id: string | null;
+  media_asset_id: string;
+  status: string;
+  progress: number;
+  detail: string | null;
+  error: string | null;
+  result?: { summary?: string; clips?: Array<{ title: string; start_time: number; end_time: number; virality_score: number }> };
 }
