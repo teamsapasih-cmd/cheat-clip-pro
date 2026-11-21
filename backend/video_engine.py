@@ -3768,6 +3768,7 @@ def render_clip_to_mp4(
         "-filter_complex", final_filter_complex,
         "-map", out_video_map,
         "-map", out_audio_map,
+        "-sn",  # Never carry source subtitle streams into the rendered output.
         *v_codec_args,
         "-c:a", "aac", "-b:a", "192k",
         "-pix_fmt", "yuv420p",
@@ -3815,6 +3816,7 @@ def render_clip_to_mp4(
                 "-filter_complex", final_filter_complex,
                 "-map", out_video_map,
                 "-map", out_audio_map,
+                "-sn",  # Never carry source subtitle streams into the rendered output.
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-threads", "2",
                 "-c:a", "aac", "-b:a", "192k",
                 "-pix_fmt", "yuv420p",
