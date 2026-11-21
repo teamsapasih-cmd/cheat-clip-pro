@@ -782,19 +782,51 @@ export default function App() {
             };
           });
 
-          // Step 3: Render in client browser via GPU Hardware Encoder (WebCodecs) or WASM
+          // Step 3: Generate captions from the uploaded audio file, never from the Supadata analysis transcript.
           let blob: Blob;
-          const useWebCodecsGpu = (settings.hardwareAccel === 'client_gpu' || (!settings.hardwareAccel && isWebCodecsGpuSupported())) && isWebCodecsGpuSupported();
+          const captionsEnabled = settings.subtitlesEnabled !== false && settings.captionStyle !== 'none';
+          let clipChunks: ReturnType<typeof buildCaptionChunksForClip> = [];
+
+          if (captionsEnabled) {
+            const audioFileName = uploadedVideoInfo?.savedName;
+            if (!audioFileName) {
+              throw new Error('File audio sementara untuk membuat subtitle tidak ditemukan. Ulangi proses upload video.');
+            }
+            const transcriptionResponse = await fetch('/api/transcribe-clip-words', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                file_name: audioFileName,
+                start_time: Number(clip.start_time),
+                end_time: Number(clip.end_time),
+              }),
+            });
+            const transcriptionData = await transcriptionResponse.json().catch(() => ({}));
+            if (!transcriptionResponse.ok) {
+              throw new Error(transcriptionData.detail || 'Gagal membuat subtitle animasi dari audio klip.');
+            }
+            const wordLines = (Array.isArray(transcriptionData.words) ? transcriptionData.words : [])
+              .map((word: { word?: string; start?: number; end?: number }) => ({
+                text: String(word.word || ''),
+                start: Number(word.start) || 0,
+                end: Number(word.end) || 0,
+              }))
+              .filter((word: { text: string; start: number; end: number }) => word.text && word.end > word.start);
+            clipChunks = buildCaptionChunksForClip(wordLines, 0, Math.max(0.1, Number(clip.end_time) - Number(clip.start_time)));
+            if (clipChunks.length === 0) {
+              throw new Error('Tidak ada kata yang berhasil dikenali dari audio klip. Subtitle animasi tidak dapat dibuat.');
+            }
+          }
+
+          const webCodecsAvailable = isWebCodecsGpuSupported();
+          const useWebCodecsGpu = webCodecsAvailable && (captionsEnabled || settings.hardwareAccel === 'client_gpu' || !settings.hardwareAccel);
+          if (captionsEnabled && !webCodecsAvailable) {
+            throw new Error('Browser ini belum mendukung WebCodecs yang diperlukan untuk Subtitle Animasi Tingkat Kata. Gunakan Chrome atau Edge versi terbaru.');
+          }
 
           if (useWebCodecsGpu) {
             try {
               const isPreTrimmed = !(sourceMode === 'upload' && uploadedVideoFile);
-              const clipChunks = buildCaptionChunksForClip(
-                result.transcript,
-                clip.start_time,
-                clip.end_time,
-                clip.transcript
-              );
 
               blob = await renderClipWebCodecs({
                 videoSourceUrl: rawSourceUrl,
@@ -855,8 +887,12 @@ export default function App() {
                 }
               });
             } catch (gpuErr) {
+              if (captionsEnabled) {
+                console.error('[Client GPU] WebCodecs render failed while animated captions are enabled:', gpuErr);
+                throw new Error(gpuErr instanceof Error ? gpuErr.message : 'Render Subtitle Animasi Tingkat Kata gagal. Silakan coba kembali.');
+              }
               console.warn('[Client GPU] WebCodecs hardware render failed, fallback to WASM engine:', gpuErr);
-              // Graceful fallback to WASM engine
+              // Graceful fallback to WASM engine when animated captions are not requested.
               blob = await renderClipClientSide({
                 videoSourceUrl: rawSourceUrl,
                 startTime: (sourceMode === 'upload' && uploadedVideoFile) ? clip.start_time : undefined,
