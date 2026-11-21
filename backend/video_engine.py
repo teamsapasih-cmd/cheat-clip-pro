@@ -1287,12 +1287,12 @@ def download_clip_segment(
 
     err_lower = last_err_snippet.lower()
     if "reloaded" in err_lower or "reload" in err_lower:
-        raise RuntimeError("YouTube rejected the session cookies ('The page needs to be reloaded'). Your cookies.txt may have expired or need refreshing. Please re-export fresh cookies from an active YouTube tab using the 🍪 Cookies Manager button in the top navbar.")
+        raise RuntimeError("YouTube is refusing automated video access from this server. Upload a video file that you own or have permission to use, then render again.")
     if "confirm you're not a bot" in err_lower or "sign in" in err_lower or "login" in err_lower:
         raise RuntimeError("YouTube is blocking automated downloads from this server. To render this clip, upload a video file that you own or have permission to use.")
     if "timed out" in err_lower or "timeout" in err_lower:
         raise RuntimeError("Video download timed out due to slow internet connection or lag. You can retry this clip anytime.")
-    raise RuntimeError(f"Failed to download video clip segment from YouTube ({last_err_snippet}). Check your internet connection or cookies.")
+    raise RuntimeError(f"Failed to download the YouTube video segment ({last_err_snippet}). The server could not access the source video; upload a video file that you own or have permission to use.")
 
 
 def parse_bytes_from_string(size_str: str) -> float:
