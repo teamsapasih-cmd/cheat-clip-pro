@@ -73,7 +73,7 @@ function getFriendlyErrorMessage(rawMsg: string): string {
     return 'Download interrupted by internet lag ("moov atom not found"). The video stream was cut off before finishing. Click "[~] Retry" to re-download.';
   }
   if (lower.includes("bot verification") || lower.includes("sign in") || lower.includes("confirm you're not a bot")) {
-    return 'YouTube requires cookies verification. Click the [*] Cookies Manager button in the top navbar to save your YouTube cookies.';
+    return 'YouTube is blocking automated downloads from the server. Upload a video file that you own or have permission to use, then render again.';
   }
   if (lower.includes("rendering timed out") || (lower.includes("timed out") && lower.includes("rendering"))) {
     return 'Video rendering timed out due to duration/complexity. Click "[~] Retry" or switch to Universal CPU encoder in Studio Settings.';
