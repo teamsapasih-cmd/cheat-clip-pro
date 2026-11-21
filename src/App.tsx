@@ -135,18 +135,8 @@ export default function App() {
   }>>({});
   const [trimmerClip, setTrimmerClip] = useState<ViralClip | null>(null);
 
-  // AI model selection and custom focus prompt states
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const saved = localStorage.getItem('cheat_clip_selected_model');
-    // Auto-migrate outdated 1.0 models to gemini-2.5-flash
-    if (saved && (saved.includes('1.0') || saved.includes('vision'))) {
-      localStorage.setItem('cheat_clip_selected_model', 'gemini-2.5-flash');
-      return 'gemini-2.5-flash';
-    }
-    return saved || 'gemini-2.5-flash';
-  });
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+  // AI model is selected centrally; users do not configure provider credentials.
+  const selectedModel = 'gemini-2.5-flash';
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [targetClipCount, setTargetClipCount] = useState<number>(() => {
     const val = localStorage.getItem('cheat_clip_target_clip_count');
@@ -2336,7 +2326,6 @@ export default function App() {
     const isGDrive = isGoogleDriveUrl(targetAnalyzeUrl);
     setAiStage(isGDrive ? 'Connecting to Google Drive' : 'Initializing Analysis Pipeline');
     setAiDetail(sourceMode === 'upload' ? 'Inspecting local video container & audio track...' : isGDrive ? 'Connecting to Google Drive and resolving video...' : 'Connecting to YouTube and resolving media stream metadata...');
-    const effectiveModel = selectedModel;
     setActiveProcessingModel(effectiveModel);
     setLoadingDetails(sourceMode === 'upload' ? 'Inspecting local video file...' : isGDrive ? 'Connecting to Google Drive...' : 'Connecting to YouTube...');
 
