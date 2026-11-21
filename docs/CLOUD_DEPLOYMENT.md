@@ -57,7 +57,7 @@ Do not mark production-ready until end-to-end upload, worker execution, retries,
 
 Large binary objects are temporary by default:
 - Original uploaded source media: deleted 7 days after upload verification; successful analysis refreshes the expiry to 7 days after analysis completion.
-- Cloud exports represented by `ExportedVideo`: deleted when their `expires_at` timestamp is reached. The cleanup worker supports this and preserves the database record. However, the existing legacy `/api/render-batch` flow still writes files to local `EXPORTS_DIR` and is not yet connected to `ExportedVideo` or private object storage; those legacy files are not covered by this cloud retention worker.
+- Cloud exports represented by `ExportedVideo`: deleted when their `expires_at` timestamp is reached. The cleanup worker supports this and preserves the database record. Legacy `/api/render-batch` outputs can be copied to private storage through the authenticated `/api/render-batch/{batch_id}/save-to-cloud?project_id=...` endpoint after completion. The endpoint verifies project ownership and is idempotent. The original local files are retained for backward compatibility; local disk cleanup is a separate follow-up.
 - Worker temporary files: deleted immediately after each analysis attempt, including failed attempts.
 - Analysis metadata, transcript text, clip suggestions and project/editing metadata remain in PostgreSQL; they are comparatively small and preserve useful work. A separate account-level retention policy can later expire these records (default 90 days) with user-visible notice and export options.
 - Assets with queued or processing analysis jobs are never deleted by the retention sweep.
@@ -66,6 +66,6 @@ Large binary objects are temporary by default:
 Environment variables:
 - `SOURCE_MEDIA_RETENTION_DAYS=7`
 - `RETENTION_SWEEP_INTERVAL_SECONDS=900`
-- A future cloud export persistence path must set `ExportedVideo.expires_at` to `now + EXPORT_RETENTION_DAYS` (default 7 days) when it stores an export object. Do not assume legacy local render files are automatically cleaned by this worker.
+- The authenticated legacy export bridge sets `ExportedVideo.expires_at` to `now + EXPORT_RETENTION_DAYS` (default 7 days). Local render files remain until a separate safe local-disk cleanup policy is implemented.
 
 Retention cleanup runs in the dedicated worker; no extra scheduler or local installation is required.

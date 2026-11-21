@@ -8,7 +8,7 @@ import uuid
 import zipfile
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.config import (
@@ -17,7 +17,7 @@ from backend.config import (
     detect_hardware_support,
     logger,
 )
-from backend.schemas.render import (
+from sqlalchemy import select\nfrom sqlalchemy.orm import Session\n\nfrom backend.cloud.factory import build_object_storage\nfrom backend.database.dependencies import get_db_session\nfrom backend.database.models import Project, User\nfrom backend.routers.auth import get_current_user\nfrom backend.services.legacy_render_export import persist_legacy_batch_exports\nfrom backend.schemas.render import (
     RenderBatchRequest,
     RenderSettingsModel,
     RetryBatchRequest,
@@ -308,3 +308,44 @@ def get_hardware_acceleration_status():
             },
         ],
     }
+
+
+@router.post("/api/render-batch/{batch_id}/save-to-cloud")
+def save_render_batch_to_cloud(
+    batch_id: str,
+    project_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+):
+    """Save completed legacy render files into the user's private cloud storage."""
+    batch = RENDER_BATCHES.get(batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Render batch not found")
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        storage = build_object_storage()
+        result = persist_legacy_batch_exports(
+            db,
+            storage,
+            owner_id=user.id,
+            project=project,
+            batch_id=batch_id,
+            batch=batch,
+            exports_dir=EXPORTS_DIR,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Project access denied")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Cloud object storage is not configured")
+    except Exception:
+        logger.exception("Could not save render batch %s to cloud storage", batch_id)
+        raise HTTPException(status_code=502, detail="Could not persist render outputs to cloud storage")
+    return {"status": "saved", "batch_id": batch_id, **result}
