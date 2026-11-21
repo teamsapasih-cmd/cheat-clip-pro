@@ -21,7 +21,7 @@ class RedisStreamJobQueue:
     def from_env(cls):
         url = os.environ.get("REDIS_URL")
         if not url: raise RuntimeError("REDIS_URL is required to initialize the job queue")
-        return cls(Redis.from_url(url, decode_responses=True))
+        return cls(Redis.from_url(url, decode_responses=True, socket_timeout=15, socket_connect_timeout=10))
 
     @staticmethod
     def _decode_entry(entry_id: str, fields: dict[str, Any]) -> dict[str, Any]:
