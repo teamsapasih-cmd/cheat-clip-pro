@@ -69,6 +69,9 @@ jobs:
       - name: Test cloud analysis job API
         run: python -m pytest -q tests/test_analysis_jobs_api.py
 
+      - name: Test audio-only clip word transcription API
+        run: python -m pytest -q tests/test_clip_word_transcription_api.py
+
       - name: Verify Alembic initial migration
         env:
           DATABASE_URL: sqlite:///./ci_migration_test.db
