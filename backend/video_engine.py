@@ -1051,6 +1051,16 @@ def download_clip_segment(
     if stage_callback:
         stage_callback("Preparing YouTube video stream...", 42.0)
 
+    def _is_youtube_access_challenge(error_text: str) -> bool:
+        lowered = (error_text or "").lower()
+        return any(marker in lowered for marker in (
+            "confirm you're not a bot",
+            "sign in to confirm",
+            "bot verification",
+            "requestblocked",
+            "verify you are human",
+        ))
+
     with ephemeral_cookies_file(cookies_content) as temp_cookies:
         has_cookies = temp_cookies is not None or get_effective_cookies_path() is not None
         # If cookies are present, try with cookies first; if rejected by YouTube (or any reload/bot error), try guest mode.
@@ -1095,6 +1105,11 @@ def download_clip_segment(
                     except Exception:
                         pass
                 last_err_snippet = res.stderr[:300] if (res and res.stderr) else "empty output or invalid file (moov atom missing)"
+                if _is_youtube_access_challenge(last_err_snippet):
+                    if use_cookies and False in attempts:
+                        logger.warning("YouTube access challenge detected with optional cookies; trying one guest-mode request.")
+                        continue
+                    break
             except subprocess.TimeoutExpired:
                 logger.warning(f"yt-dlp download-sections timed out after {timeout_sec}s for {clean_url} ({mode_label}).")
                 if output_path.exists():
@@ -1176,6 +1191,12 @@ def download_clip_segment(
                         pass
                 last_err_snippet = str(e)
 
+            if _is_youtube_access_challenge(last_err_snippet):
+                if use_cookies and False in attempts:
+                    logger.warning("YouTube access challenge detected during stream fallback; trying guest mode once.")
+                    continue
+                break
+
             # When cookies are active, DO NOT silently downgrade to 480p/360p while cookies are on!
             # Instead, proceed immediately to guest mode HD attempt before accepting any low resolution.
             if use_cookies and False in attempts:
@@ -1219,6 +1240,11 @@ def download_clip_segment(
                         pass
                 if res_720p and res_720p.stderr:
                     last_err_snippet = res_720p.stderr[:300]
+                if _is_youtube_access_challenge(last_err_snippet):
+                    if use_cookies and False in attempts:
+                        logger.warning("YouTube access challenge detected at 720p; trying guest mode once.")
+                        continue
+                    break
             except Exception as e:
                 logger.warning(f"720p fallback failed ({mode_label}): {e}")
                 if output_path.exists():
