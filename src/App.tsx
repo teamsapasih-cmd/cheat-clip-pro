@@ -6329,7 +6329,6 @@ Transcript:
                   videoUrl={result.video_url || url}
                   videoId={result.video_id}
                   allClips={result.clips}
-                  transcript={result.transcript || []}
                   markedClips={markedClipsList}
                   activeClip={activeClip}
                   onStartRender={handleStartBatchRender}
