@@ -259,7 +259,7 @@ export const DEFAULT_STUDIO_PREFS: Required<StudioPreferences> = {
   streamerPreset: 'none',
   facecamPosition: 'auto',
   titlePosition: 'auto',
-  captionStyle: 'none',
+  captionStyle: 'viral_pop',
   captionFont: 'Outfit',
   titleFont: 'Outfit',
   fontSize: 'medium',
@@ -348,7 +348,10 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const [titleSuffix, setTitleSuffix] = useState<string>(() => getSavedStudioPreferences().titleSuffix ?? DEFAULT_STUDIO_PREFS.titleSuffix);
   const [customClipTitles, setCustomClipTitles] = useState<Record<string, string>>({});
   const [titlePosition, setTitlePosition] = useState<TitlePosition>(() => getSavedStudioPreferences().titlePosition ?? DEFAULT_STUDIO_PREFS.titlePosition);
-  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>('none');
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => {
+    const savedStyle = getSavedStudioPreferences().captionStyle;
+    return savedStyle && savedStyle !== 'none' ? savedStyle : 'viral_pop';
+  });
   const [lastActiveCaptionStyle, setLastActiveCaptionStyle] = useState<CaptionStyle>(() => {
     const cap = getSavedStudioPreferences().captionStyle ?? DEFAULT_STUDIO_PREFS.captionStyle;
     return cap !== 'none' ? cap : 'viral_pop';
@@ -1718,8 +1721,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
       titleFontSize,
       titleFontSizePx,
       titleTextCase,
-      subtitlesEnabled: false,
-      captionStyle: 'none',
+      // Generate animated word-level captions from the clip audio, never from Supadata's analysis transcript.
+      subtitlesEnabled: captionStyle !== 'none',
+      captionStyle,
       captionFont,
       fontSize,
       fontSizePx,
