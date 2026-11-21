@@ -98,3 +98,13 @@ def test_duplicate_registration_is_rejected(client: TestClient):
         json={"email": "same@example.test", "password": "a-strong-password-123"},
     )
     assert response.status_code == 409
+
+
+def test_registration_fails_safely_when_jwt_secret_is_missing(client: TestClient, monkeypatch):
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "secret-missing@example.test", "password": "a-strong-password-123"},
+    )
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"]
