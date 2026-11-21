@@ -52,8 +52,8 @@ def register(client: TestClient, email: str) -> dict:
 
 
 def test_register_login_and_current_user(client: TestClient):
-    account = register(client, "first@example.test")
-    assert account["user"]["email"] == "first@example.test"
+    account = register(client, "first@example.com")
+    assert account["user"]["email"] == "first@example.com"
 
     headers = {"Authorization": f"Bearer {account['access_token']}"}
     me = client.get("/api/auth/me", headers=headers)
@@ -62,15 +62,15 @@ def test_register_login_and_current_user(client: TestClient):
 
     login = client.post(
         "/api/auth/login",
-        json={"email": "first@example.test", "password": "a-strong-password-123"},
+        json={"email": "first@example.com", "password": "a-strong-password-123"},
     )
     assert login.status_code == 200
     assert login.json()["user"]["id"] == account["user"]["id"]
 
 
 def test_project_data_is_scoped_to_authenticated_owner(client: TestClient):
-    first = register(client, "first@example.test")
-    second = register(client, "second@example.test")
+    first = register(client, "first@example.com")
+    second = register(client, "second@example.com")
     first_headers = {"Authorization": f"Bearer {first['access_token']}"}
     second_headers = {"Authorization": f"Bearer {second['access_token']}"}
 
@@ -94,10 +94,10 @@ def test_project_endpoints_require_authentication(client: TestClient):
 
 
 def test_duplicate_registration_is_rejected(client: TestClient):
-    register(client, "same@example.test")
+    register(client, "same@example.com")
     response = client.post(
         "/api/auth/register",
-        json={"email": "same@example.test", "password": "a-strong-password-123"},
+        json={"email": "same@example.com", "password": "a-strong-password-123"},
     )
     assert response.status_code == 409
 
@@ -106,7 +106,7 @@ def test_registration_fails_safely_when_jwt_secret_is_missing(client: TestClient
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     response = client.post(
         "/api/auth/register",
-        json={"email": "secret-missing@example.test", "password": "a-strong-password-123"},
+        json={"email": "secret-missing@example.com", "password": "a-strong-password-123"},
     )
     assert response.status_code == 503
     assert "not configured" in response.json()["detail"]
@@ -114,7 +114,7 @@ def test_registration_fails_safely_when_jwt_secret_is_missing(client: TestClient
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-that-is-at-least-thirty-two-characters")
     retry = client.post(
         "/api/auth/register",
-        json={"email": "secret-missing@example.test", "password": "a-strong-password-123"},
+        json={"email": "secret-missing@example.com", "password": "a-strong-password-123"},
     )
     assert retry.status_code == 201, retry.text
 
@@ -138,8 +138,8 @@ def test_cloud_upload_requires_owned_project_and_verifies_object(client: TestCli
     storage = FakeObjectStorage()
     monkeypatch.setattr(cloud_media, "build_object_storage", lambda: storage)
 
-    first = register(client, "media-owner@example.test")
-    second = register(client, "other-owner@example.test")
+    first = register(client, "media-owner@example.com")
+    second = register(client, "other-owner@example.com")
     first_headers = {"Authorization": f"Bearer {first['access_token']}"}
     second_headers = {"Authorization": f"Bearer {second['access_token']}"}
 
@@ -193,7 +193,7 @@ def test_cloud_upload_rejects_unsupported_content_type(client: TestClient, monke
     import backend.routers.cloud_media as cloud_media
 
     monkeypatch.setattr(cloud_media, "build_object_storage", lambda: FakeObjectStorage())
-    account = register(client, "media-type@example.test")
+    account = register(client, "media-type@example.com")
     headers = {"Authorization": f"Bearer {account['access_token']}"}
     project = client.post(
         "/api/projects", headers=headers, json={"name": "Media project"}
