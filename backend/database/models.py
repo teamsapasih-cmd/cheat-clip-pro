@@ -100,7 +100,7 @@ class Analysis(Base, TimestampMixin):
     summary: Mapped[str | None] = mapped_column(Text)
     result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     request_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
-    queue_job_id: Mapped[str | None] = mapped_column(String(255), unique=True)
+    queue_job_id: Mapped[str | None] = mapped_column(String(255))
     progress_percent: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text)
 
