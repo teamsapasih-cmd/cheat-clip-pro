@@ -11,6 +11,7 @@ from backend.database.dependencies import get_db_session
 from backend.database.models import Base
 from backend.routers.auth import router as auth_router
 from backend.routers.projects import router as projects_router
+from backend.routers.cloud_media import router as cloud_media_router
 
 
 @pytest.fixture()
@@ -34,6 +35,7 @@ def client(monkeypatch) -> Iterator[TestClient]:
     app = FastAPI()
     app.include_router(auth_router)
     app.include_router(projects_router)
+    app.include_router(cloud_media_router)
     app.dependency_overrides[get_db_session] = override_db
     with TestClient(app) as test_client:
         yield test_client
@@ -115,3 +117,95 @@ def test_registration_fails_safely_when_jwt_secret_is_missing(client: TestClient
         json={"email": "secret-missing@example.test", "password": "a-strong-password-123"},
     )
     assert retry.status_code == 201, retry.text
+
+
+class FakeObjectStorage:
+    def __init__(self):
+        self.expected_size = 0
+        self.expected_type = ""
+
+    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
+        self.expected_type = content_type
+        return "https://storage.example.test/signed-upload"
+
+    def get_metadata(self, key: str) -> dict[str, object]:
+        return {"size_bytes": self.expected_size, "content_type": self.expected_type}
+
+
+def test_cloud_upload_requires_owned_project_and_verifies_object(client: TestClient, monkeypatch):
+    import backend.routers.cloud_media as cloud_media
+
+    storage = FakeObjectStorage()
+    monkeypatch.setattr(cloud_media, "build_object_storage", lambda: storage)
+
+    first = register(client, "media-owner@example.test")
+    second = register(client, "other-owner@example.test")
+    first_headers = {"Authorization": f"Bearer {first['access_token']}"}
+    second_headers = {"Authorization": f"Bearer {second['access_token']}"}
+
+    project = client.post(
+        "/api/projects", headers=first_headers, json={"name": "Media project"}
+    ).json()
+
+    denied = client.post(
+        "/api/media/cloud/upload-intent",
+        headers=second_headers,
+        json={
+            "project_id": project["id"],
+            "filename": "clip.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 1024,
+        },
+    )
+    assert denied.status_code == 404
+
+    intent = client.post(
+        "/api/media/cloud/upload-intent",
+        headers=first_headers,
+        json={
+            "project_id": project["id"],
+            "filename": "../../clip.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 1024,
+        },
+    )
+    assert intent.status_code == 201, intent.text
+    assert intent.json()["method"] == "PUT"
+    assert intent.json()["required_headers"]["Content-Type"] == "video/mp4"
+    assert intent.json()["media_asset_id"]
+
+    storage.expected_size = 1024
+    completed = client.post(
+        f"/api/media/cloud/{intent.json()['media_asset_id']}/complete",
+        headers=first_headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "uploaded"
+
+    hidden = client.post(
+        f"/api/media/cloud/{intent.json()['media_asset_id']}/complete",
+        headers=second_headers,
+    )
+    assert hidden.status_code == 404
+
+
+def test_cloud_upload_rejects_unsupported_content_type(client: TestClient, monkeypatch):
+    import backend.routers.cloud_media as cloud_media
+
+    monkeypatch.setattr(cloud_media, "build_object_storage", lambda: FakeObjectStorage())
+    account = register(client, "media-type@example.test")
+    headers = {"Authorization": f"Bearer {account['access_token']}"}
+    project = client.post(
+        "/api/projects", headers=headers, json={"name": "Media project"}
+    ).json()
+    response = client.post(
+        "/api/media/cloud/upload-intent",
+        headers=headers,
+        json={
+            "project_id": project["id"],
+            "filename": "not-video.exe",
+            "content_type": "application/x-msdownload",
+            "size_bytes": 1024,
+        },
+    )
+    assert response.status_code == 415
