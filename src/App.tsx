@@ -6,7 +6,7 @@ import { extractAudioFromVideoClient } from './utils/audioExtractor';
 import { renderClipClientSide, triggerBrowserDownload } from './services/clientRenderer';
 import { renderClipWebCodecs, isWebCodecsGpuSupported } from './services/webcodecsRenderer';
 import { buildCaptionChunksForClip } from './services/captionUtils';
-import { isMobileDevice, requestWakeLock, releaseWakeLock } from './utils/deviceUtils';
+import { requestWakeLock, releaseWakeLock } from './utils/deviceUtils';
 import { LayoutMetricsSync } from './utils/layoutMetricsSync';
 import { useLanguage } from './locales';
 import { CloudWorkspacePanel } from './components/CloudWorkspacePanel';
