@@ -45,7 +45,6 @@ import {
   ExternalLink,
   X,
   Trash2,
-  Heart,
   RefreshCw,
   Layers,
   ArrowLeft,
