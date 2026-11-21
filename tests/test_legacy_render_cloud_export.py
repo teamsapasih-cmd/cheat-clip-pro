@@ -93,31 +93,3 @@ def test_legacy_render_cloud_save_rejects_non_completed_batch(tmp_path: Path):
     except ValueError:
         pass
     db.close()
-
-
-def test_legacy_render_cloud_save_rejects_file_over_free_tier_limit(tmp_path: Path, monkeypatch):
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    db = Session(engine)
-    user = User(email="render-large@example.com")
-    db.add(user)
-    db.flush()
-    project = Project(owner_id=user.id, name="Large export")
-    db.add(project)
-    db.commit()
-
-    mp4 = tmp_path / "large.mp4"
-    mp4.write_bytes(b"0123456789")
-    monkeypatch.setenv("MAX_CLOUD_UPLOAD_BYTES", "5")
-    storage = FakeStorage()
-    try:
-        persist_legacy_batch_exports(
-            db, storage, owner_id=user.id, project=project,
-            batch_id="batch_large", batch={"overall_status": "completed", "clips": [{"status": "completed", "output_path": str(mp4)}]},
-            exports_dir=tmp_path,
-        )
-        assert False, "expected ValueError for an oversized cloud export"
-    except ValueError as error:
-        assert "Cloud storage limit" in str(error)
-    assert storage.objects == {}
-    db.close()

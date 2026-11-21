@@ -11,7 +11,6 @@ import {
 import './CloudWorkspacePanel.css';
 
 const SESSION_KEY = 'clip_intelligence_session';
-const MAX_CLOUD_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 function readSession(): AuthSession | null {
   try {
@@ -137,12 +136,6 @@ export function CloudWorkspacePanel() {
     setError('');
     setMessage('');
     setProgress(0);
-    if (file.size > MAX_CLOUD_UPLOAD_BYTES) {
-      setError('File exceeds the current Supabase Free limit of 50 MB. Choose a smaller file or wait until larger-file storage is configured.');
-      setProgress(null);
-      setBusy(false);
-      return;
-    }
     try {
       const intent = await workspaceApi.createUploadIntent(session.access_token, selectedProject, file);
       await putSignedUpload(intent.upload_url, file, intent.required_headers, setProgress);
@@ -249,7 +242,7 @@ export function CloudWorkspacePanel() {
                 <div className="cloud-workspace-upload">
                   <UploadCloud size={24} />
                   <strong>Upload source video</strong>
-                  <span>MP4, MOV, WebM or MKV · maximum 50 MB (current free storage)</span>
+                  <span>MP4, MOV, WebM or MKV · maximum 2 GB</span>
                   <label className="cloud-workspace-file-button">
                     Choose video
                     <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska" disabled={busy || !selectedProject} onChange={(event) => {

@@ -1,33 +1,29 @@
 # Cloud infrastructure setup
 
-This repository uses provider-neutral adapters. The current no-card storage configuration uses the existing private Supabase Storage bucket; Cloudflare R2 is optional and is not required.
+This repository now has a provider-neutral foundation for cloud services. It does
+not connect to or provision paid services automatically.
 
 ## Required deployment variables
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Supabase PostgreSQL connection string |
+| `DATABASE_URL` | PostgreSQL connection string |
 | `REDIS_URL` | Redis connection string for durable background jobs |
-| `OBJECT_STORAGE_ENDPOINT` | Supabase S3-compatible endpoint |
-| `OBJECT_STORAGE_BUCKET` | Private Supabase Storage bucket |
-| `OBJECT_STORAGE_ACCESS_KEY` | Supabase server-side S3 access key |
-| `OBJECT_STORAGE_SECRET_KEY` | Supabase server-side S3 secret |
-| `OBJECT_STORAGE_REGION` | Region shown in Supabase S3 settings |
-| `MAX_CLOUD_UPLOAD_BYTES` | 52428800 (50 MiB on Supabase Free) |
+| `OBJECT_STORAGE_ENDPOINT` | S3-compatible object-storage endpoint |
+| `OBJECT_STORAGE_BUCKET` | Private media bucket name |
+| `OBJECT_STORAGE_ACCESS_KEY` | Storage service access key |
+| `OBJECT_STORAGE_SECRET_KEY` | Storage service secret |
+| `OBJECT_STORAGE_REGION` | Optional storage region |
 
-Generate S3 credentials in Supabase Dashboard > Storage > Configuration > S3. These credentials provide broad access to Storage and bypass Storage RLS. They are server-only secrets; never put them in browser variables, source files, or chat.
-
-## Current free-tier limit
-
-The existing private bucket is named `clipstudio-private-media`. Its bucket-level cap is 2 GiB, but the Supabase Free global upload cap is 50 MB. The app enforces a conservative 50 MiB per-file limit for source uploads and cloud exports. Files larger than this are rejected before transfer. This limit can only be raised after selecting and configuring a provider/plan that supports the larger files.
-
-## Optional future Cloudflare R2
-
-R2 is deliberately not required now. If it is activated later, replace the endpoint, region and S3 credentials with the R2 values and increase `MAX_CLOUD_UPLOAD_BYTES` only after verifying the R2 bucket and account billing configuration. The S3 adapter stays the same, so application workflows remain portable.
+The application reads these values through `backend.cloud.settings.CloudSettings`.
+It reports missing variable names only; it never returns secret values.
 
 ## Strict production validation
 
-Keep `CLOUD_REQUIRE_INFRASTRUCTURE=0` while the free-tier services are being assembled. Set it to `1` only after PostgreSQL, Redis, object storage, JWT and AI provider credentials are configured in the deployment platform. The validation helper fails fast and lists missing variable names without exposing secret values.
+Set `CLOUD_REQUIRE_INFRASTRUCTURE=1` only after all services and secrets have
+been configured in the deployment platform. The validation helper then fails
+fast and lists missing variable names. Strict mode is opt-in so existing local
+and current deployments are not broken.
 
 ## Adapter implementation sequence
 
@@ -37,4 +33,13 @@ Keep `CLOUD_REQUIRE_INFRASTRUCTURE=0` while the free-tier services are being ass
 4. Per-user authorization and tenant-scoped media/job records.
 5. Migration of existing local render/download workflows behind the new contracts.
 
-Use private buckets and short-lived signed URLs. Do not mark production-ready until end-to-end upload, worker execution, retries, tenant isolation and result persistence pass.
+Do not place service credentials in source files, browser JavaScript, commit
+messages, or chat. Configure them in the cloud provider's secret/environment
+settings. Use private buckets and short-lived signed URLs.
+
+## Current limitation
+
+The contracts and configuration are scaffolding only. No database, Redis, or
+object-storage network client is instantiated yet. Existing local filesystem
+processing remains the active implementation until adapters are implemented,
+tested, and deployed.

@@ -28,7 +28,13 @@ class S3ObjectStorage:
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             region_name=region or "auto",
-            config=Config(signature_version="s3v4", retries={"max_attempts": 4}),
+            config=Config(
+                signature_version="s3v4",
+                retries={"max_attempts": 4},
+                # Supabase Storage S3 expects path-style bucket addressing.
+                # This style is also supported by Cloudflare R2.
+                s3={"addressing_style": "path"},
+            ),
         )
 
     @classmethod

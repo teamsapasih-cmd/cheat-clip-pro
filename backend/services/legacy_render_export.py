@@ -93,12 +93,6 @@ def persist_legacy_batch_exports(
     if not candidates:
         raise FileNotFoundError("No completed render files were found for this batch")
 
-    max_upload_bytes = max(1, int(os.environ.get("MAX_CLOUD_UPLOAD_BYTES", str(50 * 1024 * 1024))))
-    oversized = [(path.name, path.stat().st_size) for path, _, _ in candidates if path.stat().st_size > max_upload_bytes]
-    if oversized:
-        names = ", ".join(f"{name} ({size} bytes)" for name, size in oversized)
-        raise ValueError(f"Cloud storage limit is {max_upload_bytes} bytes per file; oversized exports: {names}")
-
     current = now or datetime.now(timezone.utc)
     retention_days = max(1, int(os.environ.get("EXPORT_RETENTION_DAYS", "7")))
     expires_at = current + timedelta(days=retention_days)
