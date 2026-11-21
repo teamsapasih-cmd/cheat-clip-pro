@@ -39,8 +39,8 @@ jobs:
       - name: Lint frontend
         run: npm run lint
 
-  backend-syntax:
-    name: Backend Python syntax
+  backend-tests:
+    name: Backend syntax and cloud foundation tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,5 +51,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install test runner
+        run: python -m pip install --upgrade pytest
+
       - name: Compile backend and tests
         run: python -m compileall -q backend tests
+
+      - name: Test cloud configuration foundation
+        run: python -m pytest -q tests/test_cloud_foundation.py
