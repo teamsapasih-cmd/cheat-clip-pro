@@ -3,16 +3,21 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.config import UPLOADS_DIR
-from backend.main import app
+from backend.routers.media import router
+
+
+test_app = FastAPI()
+test_app.include_router(router)
 
 
 class TestClipWordTranscriptionApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
+        cls.client = TestClient(test_app)
 
     def setUp(self):
         self.filename = f"upload_{uuid4().hex[:10]}_audio.wav"
