@@ -4,14 +4,15 @@ import asyncio, json, logging, os, shutil, socket, tempfile, time
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from backend.cloud.factory import build_object_storage
 from backend.cloud.settings import validate_production_configuration
 from backend.cloud.redis_queue import RedisStreamJobQueue
-from backend.database.models import Analysis, MediaAsset
+from backend.database.models import Analysis, MediaAsset, ExportedVideo
 from backend.database.session import build_engine, build_session_factory
 from backend.services.analysis_persistence import persist_analysis_result
+from backend.services.retention import run_retention_sweep
 logger = logging.getLogger("clipstudio.worker")
 Handler = Callable[[dict[str, object]], None]
 
@@ -103,7 +104,17 @@ def run_worker(handlers: dict[str, Handler] | None = None) -> None:
     max_attempts = max(1, int(os.environ.get("WORKER_MAX_ATTEMPTS", "3")))
     reclaim_idle_ms = max(10_000, int(os.environ.get("WORKER_RECLAIM_IDLE_MS", "60000")))
     logger.info("Worker %s started; registered handlers: %s", consumer, sorted(registered))
+    retention_interval = max(60, int(os.environ.get("RETENTION_SWEEP_INTERVAL_SECONDS", "900")))
+    next_retention_sweep = 0.0
     while True:
+        if time.monotonic() >= next_retention_sweep:
+            try:
+                summary = run_retention_sweep(_session_factory()(), build_object_storage())
+                logger.info("Retention sweep: %s", summary)
+            except Exception:
+                logger.exception("Retention sweep failed; it will retry next interval")
+            finally:
+                next_retention_sweep = time.monotonic() + retention_interval
         jobs = queue.claim_stale(consumer, min_idle_ms=reclaim_idle_ms, count=5)
         if not jobs: jobs = queue.read(consumer=consumer, count=1, block_ms=5000)
         for job in jobs:

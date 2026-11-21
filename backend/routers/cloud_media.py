@@ -135,6 +135,9 @@ def complete_cloud_upload(
     if actual_type != (asset.content_type or "").lower():
         raise HTTPException(status_code=400, detail="Uploaded file content type does not match the upload request")
 
+    from datetime import datetime, timedelta, timezone
+    retention_days = max(1, int(os.environ.get("SOURCE_MEDIA_RETENTION_DAYS", "7")))
+    asset.retention_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
     asset.size_bytes = actual_size
     asset.status = "uploaded"
     asset.metadata_json = {

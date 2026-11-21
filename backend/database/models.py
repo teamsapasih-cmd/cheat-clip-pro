@@ -82,6 +82,7 @@ class MediaAsset(Base, TimestampMixin):
     height: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(30), default="uploaded", nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    retention_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     project: Mapped[Project] = relationship(back_populates="media_assets")
 
@@ -174,6 +175,7 @@ class ExportedVideo(Base, TimestampMixin):
     size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[float | None] = mapped_column(Float)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    storage_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PublicationSuggestion(Base, TimestampMixin):

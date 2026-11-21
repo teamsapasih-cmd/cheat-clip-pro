@@ -51,3 +51,21 @@ The application uses the `clipstudio_*` table namespace to avoid collisions with
 - Upload an authorized test video, verify upload completion, enqueue analysis, and confirm analysis + clip candidates persist.
 
 Do not mark production-ready until end-to-end upload, worker execution, retries, tenant isolation and result persistence pass.
+
+
+## Automatic data retention (default policy)
+
+Large binary objects are temporary by default:
+- Original uploaded source media: deleted 7 days after upload verification; successful analysis refreshes the expiry to 7 days after analysis completion.
+- Rendered exports: deleted when their `expires_at` timestamp is reached. Render/export creation must set this timestamp (default 7 days).
+- Worker temporary files: deleted immediately after each analysis attempt, including failed attempts.
+- Analysis metadata, transcript text, clip suggestions and project/editing metadata remain in PostgreSQL; they are comparatively small and preserve useful work. A separate account-level retention policy can later expire these records (default 90 days) with user-visible notice and export options.
+- Assets with queued or processing analysis jobs are never deleted by the retention sweep.
+- Storage deletion is idempotent at the application level: successful deletion clears the object key / records `storage_deleted_at`; failures are logged and retried in the next sweep.
+
+Environment variables:
+- `SOURCE_MEDIA_RETENTION_DAYS=7`
+- `RETENTION_SWEEP_INTERVAL_SECONDS=900`
+- Render/export services should set `expires_at` to `now + EXPORT_RETENTION_DAYS` (default 7 days).
+
+Retention cleanup runs in the dedicated worker; no extra scheduler or local installation is required.

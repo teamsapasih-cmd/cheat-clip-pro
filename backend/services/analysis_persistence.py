@@ -46,6 +46,9 @@ def persist_analysis_result(
     analysis.model = str(result.get("model") or "")[:120] or analysis.model
     analysis.summary = str(result.get("summary") or "")
     analysis.result_json = result
+    from datetime import timedelta
+    import os
+    media.retention_expires_at = media.updated_at + timedelta(days=max(1, int(os.environ.get("SOURCE_MEDIA_RETENTION_DAYS", "7"))))
 
     db.execute(delete(ClipCandidate).where(ClipCandidate.analysis_id == analysis.id))
     for clip in clips:
