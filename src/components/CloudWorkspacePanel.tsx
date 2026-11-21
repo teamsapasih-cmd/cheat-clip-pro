@@ -37,11 +37,7 @@ export function CloudWorkspacePanel() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!session?.access_token) {
-      setUser(null);
-      setProjects([]);
-      return;
-    }
+    if (!session?.access_token) return;
     let active = true;
     void Promise.all([
       workspaceApi.me(session.access_token),
@@ -59,6 +55,8 @@ export function CloudWorkspacePanel() {
       if (!active) return;
       const text = reason instanceof Error ? reason.message : 'Session expired';
       setError(text);
+      setUser(null);
+      setProjects([]);
       sessionStorage.removeItem(SESSION_KEY);
       setSession(null);
     });
