@@ -5277,7 +5277,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
                       }
                       const finalClipName = dupCount > 0 ? `${cleanTitle} (${dupCount})` : cleanTitle;
                       const dlUrlWithTitle = c.download_url
-                        ? `${c.download_url}${c.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`
+                        ? (c.download_url.startsWith('blob:')
+                          ? c.download_url
+                          : `${c.download_url}${c.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`)
                         : '';
 
                       return (
@@ -5847,7 +5849,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
               }
               const finalClipName = dupCount > 0 ? `${cleanTitle} (${dupCount})` : cleanTitle;
               const dlUrlWithTitle = clip.download_url
-                ? `${clip.download_url}${clip.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`
+                ? (clip.download_url.startsWith('blob:')
+                  ? clip.download_url
+                  : `${clip.download_url}${clip.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`)
                 : '';
 
                 const isError = clip.status === 'error';
