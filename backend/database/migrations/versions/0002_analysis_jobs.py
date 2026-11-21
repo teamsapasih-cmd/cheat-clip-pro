@@ -14,18 +14,18 @@ depends_on = None
 
 def upgrade() -> None:
     inspector = sa.inspect(op.get_bind())
-    existing = {column["name"] for column in inspector.get_columns("analyses")}
+    existing = {column["name"] for column in inspector.get_columns("clipstudio_analyses")}
     if "request_json" not in existing:
-        op.add_column("analyses", sa.Column("request_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")))
+        op.add_column("clipstudio_analyses", sa.Column("request_json", sa.JSON(), nullable=False, server_default=sa.text("'{}'")))
     if "queue_job_id" not in existing:
-        op.add_column("analyses", sa.Column("queue_job_id", sa.String(length=255), nullable=True))
+        op.add_column("clipstudio_analyses", sa.Column("queue_job_id", sa.String(length=255), nullable=True))
     if "progress_percent" not in existing:
-        op.add_column("analyses", sa.Column("progress_percent", sa.Float(), nullable=False, server_default="0"))
+        op.add_column("clipstudio_analyses", sa.Column("progress_percent", sa.Float(), nullable=False, server_default="0"))
 
 
 def downgrade() -> None:
     inspector = sa.inspect(op.get_bind())
-    existing = {column["name"] for column in inspector.get_columns("analyses")}
+    existing = {column["name"] for column in inspector.get_columns("clipstudio_analyses")}
     for column in ("progress_percent", "queue_job_id", "request_json"):
         if column in existing:
-            op.drop_column("analyses", column)
+            op.drop_column("clipstudio_analyses", column)

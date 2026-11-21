@@ -16,17 +16,17 @@ branch_labels = None
 depends_on = None
 
 _INITIAL_TABLES = (
-    "users",
-    "projects",
-    "media_assets",
-    "analyses",
-    "transcripts",
-    "clip_candidates",
-    "editing_projects",
-    "render_jobs",
-    "exported_videos",
-    "publication_suggestions",
-    "usage_logs",
+    "clipstudio_users",
+    "clipstudio_projects",
+    "clipstudio_media_assets",
+    "clipstudio_analyses",
+    "clipstudio_transcripts",
+    "clipstudio_clip_candidates",
+    "clipstudio_editing_projects",
+    "clipstudio_render_jobs",
+    "clipstudio_exported_videos",
+    "clipstudio_publication_suggestions",
+    "clipstudio_usage_logs",
 )
 
 
