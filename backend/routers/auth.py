@@ -1,8 +1,6 @@
 """Authentication endpoints backed by the durable user table."""
 from __future__ import annotations
 
-from datetime import timedelta
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -91,7 +89,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db_session)):
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is unavailable")
 
-    token = create_access_token(user.id)
+    token = _issue_token(user.id)
     return TokenResponse(
         access_token=token,
         expires_in=_ACCESS_TOKEN_SECONDS,
