@@ -40,7 +40,6 @@ import type {
   HardwareAccelOption,
   HardwareAccelInfo,
   FontItem,
-  TranscriptLine,
 } from '../types';
 import { getFontWeightForFamily, getFontFamilyWithFallback, wrapTitleSmart } from '../services/captionUtils';
 
@@ -63,7 +62,6 @@ interface ClipStudioSectionProps {
   allowAppUpdates?: boolean;
   onOpenCookiesModal?: () => void;
   onBackToClips?: () => void;
-  transcript?: TranscriptLine[];
 }
 
 function getFriendlyErrorMessage(rawMsg: string): string {
@@ -775,8 +773,7 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
               try {
                 event.target.mute();
                 setIsMuted(true);
-                // Keep YouTube's native caption track disabled; the studio draws
-                // its own editable subtitle overlay from the analysis transcript.
+                // Keep YouTube's native caption track disabled. Rendered captions are generated from clip audio.
                 if (typeof event.target.unloadModule === 'function') {
                   event.target.unloadModule('captions');
                   event.target.unloadModule('cc');
