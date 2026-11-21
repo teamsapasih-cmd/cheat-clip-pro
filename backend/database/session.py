@@ -8,14 +8,25 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 
-def build_engine(database_url: str | None = None, **kwargs) -> Engine:
-    url = database_url or os.environ.get("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL is required to create a database engine")
+def normalize_database_url(url: str) -> str:
+    """Use psycopg 3 explicitly for Supabase/PostgreSQL URLs."""
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
 
+
+def build_engine(database_url: str | None = None, **kwargs) -> Engine:
+    raw_url = database_url or os.environ.get("DATABASE_URL")
+    if not raw_url:
+        raise RuntimeError("DATABASE_URL is required to create a database engine")
+    url = normalize_database_url(raw_url)
     options = {"pool_pre_ping": True}
     if url.startswith("sqlite"):
         options = {"connect_args": {"check_same_thread": False}}
+    elif url.startswith("postgresql+psycopg://"):
+        options = {"connect_args": {"prepare_threshold": None}, **options}
     options.update(kwargs)
     return create_engine(url, **options)
 

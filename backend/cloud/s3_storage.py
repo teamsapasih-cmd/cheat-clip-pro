@@ -91,6 +91,10 @@ class S3ObjectStorage:
         response = self.client.get_object(Bucket=self.bucket, Key=key)
         return response["Body"]
 
+    def check_bucket(self) -> None:
+        """Raise if the configured private bucket cannot be reached."""
+        self.client.head_bucket(Bucket=self.bucket)
+
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
