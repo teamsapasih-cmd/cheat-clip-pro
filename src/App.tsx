@@ -10,7 +10,6 @@ import { buildCaptionChunksForClip } from './services/captionUtils';
 import { isMobileDevice, requestWakeLock, releaseWakeLock } from './utils/deviceUtils';
 import { LayoutMetricsSync } from './utils/layoutMetricsSync';
 import { useLanguage } from './locales';
-import { HackerApiKeyInput } from './components/HackerApiKeyInput';
 import { CloudWorkspacePanel } from './components/CloudWorkspacePanel';
 
 // Lazy-loaded modal and heavy studio components to minimize initial bundle size and speed up page load
@@ -96,18 +95,8 @@ export default function App() {
     if (saved === '15s' || saved === '30s' || saved === '60s' || saved === 'auto') return saved;
     return '30s';
   });
-  // AI provider credentials are intentionally server-side only.
-  const apiKey = '';
+  // AI provider and credentials are managed exclusively by the server.
   const apiProvider = 'gemini' as const;
-  const openRouterKey = '';
-  const [openRouterModel, setOpenRouterModel] = useState<string>(() => {
-    const saved = localStorage.getItem('cheat_clip_openrouter_model');
-    return saved || 'google/gemini-2.5-flash';
-  });
-  const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; name: string; description?: string; context_length?: number; recommended?: boolean }>>([]);
-  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
-  const [customOpenRouterModel, setCustomOpenRouterModel] = useState<string>('');
-  const [isCustomOpenRouterModel, setIsCustomOpenRouterModel] = useState<boolean>(false);
   const [isCookiesModalOpen, setIsCookiesModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [allowAppUpdates, setAllowAppUpdates] = useState<boolean>(() => {
@@ -2347,7 +2336,7 @@ export default function App() {
     const isGDrive = isGoogleDriveUrl(targetAnalyzeUrl);
     setAiStage(isGDrive ? 'Connecting to Google Drive' : 'Initializing Analysis Pipeline');
     setAiDetail(sourceMode === 'upload' ? 'Inspecting local video container & audio track...' : isGDrive ? 'Connecting to Google Drive and resolving video...' : 'Connecting to YouTube and resolving media stream metadata...');
-    const effectiveModel = apiProvider === 'openrouter' ? openRouterModel : selectedModel;
+    const effectiveModel = selectedModel;
     setActiveProcessingModel(effectiveModel);
     setLoadingDetails(sourceMode === 'upload' ? 'Inspecting local video file...' : isGDrive ? 'Connecting to Google Drive...' : 'Connecting to YouTube...');
 
@@ -2366,9 +2355,9 @@ export default function App() {
         body: JSON.stringify({
           url: targetAnalyzeUrl,
           duration: durationPref,
-          model: apiProvider === 'gemini' ? selectedModel : undefined,
+          model: selectedModel,
           api_provider: apiProvider,
-          openrouter_model: apiProvider === 'openrouter' ? openRouterModel : undefined,
+          openrouter_model: undefined,
           custom_prompt: customPrompt.trim() || undefined,
           range_start: rangeStartSecs,
           range_end: rangeEndSecs,
