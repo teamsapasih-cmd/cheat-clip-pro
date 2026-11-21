@@ -104,9 +104,14 @@ def run_worker(handlers: dict[str, Handler] | None = None) -> None:
     max_attempts = max(1, int(os.environ.get("WORKER_MAX_ATTEMPTS", "3")))
     reclaim_idle_ms = max(10_000, int(os.environ.get("WORKER_RECLAIM_IDLE_MS", "60000")))
     logger.info("Worker %s started; registered handlers: %s", consumer, sorted(registered))
+    if not os.environ.get("DATABASE_URL"):
+        logger.warning("DATABASE_URL is not configured. Worker will stay idle and will not consume jobs until it is added in Railway Variables.")
     retention_interval = max(60, int(os.environ.get("RETENTION_SWEEP_INTERVAL_SECONDS", "900")))
     next_retention_sweep = 0.0
     while True:
+        if not os.environ.get("DATABASE_URL"):
+            time.sleep(10)
+            continue
         if time.monotonic() >= next_retention_sweep:
             try:
                 retention_db = _session_factory()()
