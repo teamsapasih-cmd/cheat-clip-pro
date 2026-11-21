@@ -24,6 +24,16 @@ _bearer = HTTPBearer(auto_error=False)
 _ACCESS_TOKEN_SECONDS = 30 * 60
 
 
+def _issue_token(user_id: str) -> str:
+    try:
+        return create_access_token(user_id)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service is not configured on this deployment",
+        )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db_session),
@@ -60,7 +70,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db_session)):
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
     db.refresh(user)
-    token = create_access_token(user.id)
+    token = _issue_token(user.id)
     return TokenResponse(
         access_token=token,
         expires_in=_ACCESS_TOKEN_SECONDS,
