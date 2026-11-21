@@ -20,7 +20,12 @@ from backend.config import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.cloud.factory import build_object_storage\nfrom backend.database.dependencies import get_db_session\nfrom backend.database.models import Project, User\nfrom backend.routers.auth import get_current_user\nfrom backend.services.legacy_render_export import persist_legacy_batch_exports\nfrom backend.schemas.render import (
+from backend.cloud.factory import build_object_storage
+from backend.database.dependencies import get_db_session
+from backend.database.models import Project, User
+from backend.routers.auth import get_current_user
+from backend.services.legacy_render_export import persist_legacy_batch_exports
+from backend.schemas.render import (
     RenderBatchRequest,
     RenderSettingsModel,
     RetryBatchRequest,
