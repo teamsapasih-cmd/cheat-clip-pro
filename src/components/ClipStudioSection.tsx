@@ -88,7 +88,7 @@ function getFriendlyErrorMessage(rawMsg: string): string {
     return 'Disk storage is full. Please click "[x] Clear Temp" to free up storage space.';
   }
   if (lower.includes("whisper") || lower.includes("transcribe")) {
-    return 'Word transcription failed. Check your audio track or switch subtitle style to none.';
+    return 'Subtitle Animasi Tingkat Kata gagal dibuat dari audio klip. Periksa kualitas audio atau coba render ulang.';
   }
   if (lower.includes("ffmpeg") || lower.includes("filter_complex")) {
     return 'FFmpeg video rendering failed during composition. Check error details below.';
