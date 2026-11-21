@@ -34,7 +34,7 @@ _ALLOWED_CONTENT_TYPES = {
     "audio/ogg",
     "audio/flac",
 }
-_MAX_UPLOAD_BYTES = int(os.environ.get("MAX_CLOUD_UPLOAD_BYTES", str(2 * 1024 * 1024 * 1024)))
+_MAX_UPLOAD_BYTES = int(os.environ.get("MAX_CLOUD_UPLOAD_BYTES", str(50 * 1024 * 1024)))
 
 
 class UploadIntentRequest(BaseModel):

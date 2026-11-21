@@ -18,8 +18,8 @@ Both use the root Dockerfile image.
 
 - `DATABASE_URL`: Supabase PostgreSQL connection string. Prefer the Supabase Session Pooler (port 5432) for persistent application/worker connections; require SSL.
 - `REDIS_URL`: private Redis connection URL from the Railway Redis service.
-- `OBJECT_STORAGE_ENDPOINT`: `https://luelliccbrgwlrkdfhrw.supabase.co/storage/v1/s3`
-- `OBJECT_STORAGE_REGION`: `ap-south-1`
+- `OBJECT_STORAGE_ENDPOINT`: Supabase S3 endpoint for 50 MB smoke tests, or Cloudflare R2 endpoint for large videos.
+- `OBJECT_STORAGE_REGION`: `ap-south-1` for Supabase or `auto` for R2.
 - `OBJECT_STORAGE_BUCKET`: `clipstudio-private-media`
 - `OBJECT_STORAGE_ACCESS_KEY` and `OBJECT_STORAGE_SECRET_KEY`: generated under Supabase Dashboard → Storage → S3 Configuration → Access keys.
 - `JWT_SECRET_KEY`: long random secret (at least 32 random bytes).
@@ -30,8 +30,13 @@ Both use the root Dockerfile image.
 
 Never commit real values or send credentials in chat. Configure secrets only in the hosting provider Variables UI.
 
-## Storage
-A private bucket `clipstudio-private-media` exists in Supabase Storage. It is limited to 2 GiB per object and the MIME types accepted by the upload API. S3 access keys are separate from Supabase publishable/anon keys.
+## Storage provider choice
+
+A private bucket `clipstudio-private-media` exists in Supabase Storage. Its bucket-level cap is 2 GiB, but the connected Supabase organization is currently on the Free plan: Supabase enforces a **50 MB global upload limit** on Free projects. The effective limit is the lower of the global and bucket limits.
+
+For initial smoke tests, keep `MAX_CLOUD_UPLOAD_BYTES=52428800` (50 MB) and use the Supabase S3 endpoint. For the intended large-video workflow, use an S3-compatible provider such as Cloudflare R2 and set `MAX_CLOUD_UPLOAD_BYTES=2147483648` (2 GiB) after creating the bucket and credentials. R2 uses endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, region `auto`, and a private bucket named `clipstudio-private-media`.
+
+S3 access keys are separate from Supabase publishable/anon keys. Never put them in Git or chat.
 
 ## Database
 Run the migration release command before serving traffic:

@@ -40,6 +40,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy backend code
 COPY backend ./backend
+COPY alembic.ini ./alembic.ini
 
 # Copy built frontend dist from Stage 1
 COPY --from=frontend-builder /app/dist ./dist
