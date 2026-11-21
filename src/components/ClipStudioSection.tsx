@@ -300,7 +300,7 @@ export const DEFAULT_STUDIO_PREFS: Required<StudioPreferences> = {
   streamerPreset: 'none',
   facecamPosition: 'auto',
   titlePosition: 'auto',
-  captionStyle: 'viral_pop',
+  captionStyle: 'none',
   captionFont: 'Outfit',
   titleFont: 'Outfit',
   fontSize: 'medium',
@@ -312,7 +312,7 @@ export const DEFAULT_STUDIO_PREFS: Required<StudioPreferences> = {
   subtitlePositionMode: 'bottom',
   titleDuration: 'entire',
   originalAudioVolume: 100,
-  hardwareAccel: 'client_gpu',
+  hardwareAccel: 'cpu',
   titleYPercent: 17,
   titleXPercent: 50,
   subtitleYPercent: 21,
@@ -390,7 +390,7 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const [titleSuffix, setTitleSuffix] = useState<string>(() => getSavedStudioPreferences().titleSuffix ?? DEFAULT_STUDIO_PREFS.titleSuffix);
   const [customClipTitles, setCustomClipTitles] = useState<Record<string, string>>({});
   const [titlePosition, setTitlePosition] = useState<TitlePosition>(() => getSavedStudioPreferences().titlePosition ?? DEFAULT_STUDIO_PREFS.titlePosition);
-  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => getSavedStudioPreferences().captionStyle ?? DEFAULT_STUDIO_PREFS.captionStyle);
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>('none');
   const [lastActiveCaptionStyle, setLastActiveCaptionStyle] = useState<CaptionStyle>(() => {
     const cap = getSavedStudioPreferences().captionStyle ?? DEFAULT_STUDIO_PREFS.captionStyle;
     return cap !== 'none' ? cap : 'viral_pop';
@@ -485,15 +485,8 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
 
   // Hardware acceleration / Video Encoder state:
   // Defaults to Client GPU Hardware Acceleration ('client_gpu') to offload all rendering work to user's device (0% server load)
-  const [hardwareAccel, setHardwareAccel] = useState<HardwareAccelOption>(() => {
-    const saved = getSavedStudioPreferences().hardwareAccel;
-    if (saved) {
-      if (saved === 'client_gpu' && isWebCodecsGpuSupported()) return 'client_gpu';
-      if (saved === 'browser_wasm') return 'browser_wasm';
-      if (saved === 'auto' || saved === 'cpu') return saved;
-    }
-    return isWebCodecsGpuSupported() ? 'client_gpu' : 'browser_wasm';
-  });
+  // Use the reliable server CPU renderer by default; client GPU/WASM remains an explicit opt-in.
+  const [hardwareAccel, setHardwareAccel] = useState<HardwareAccelOption>('cpu');
   const [hardwareInfo, setHardwareInfo] = useState<HardwareAccelInfo | null>(null);
   const [hwDropdownOpen, setHwDropdownOpen] = useState<boolean>(false);
 
