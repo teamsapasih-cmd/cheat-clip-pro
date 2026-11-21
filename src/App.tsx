@@ -54,8 +54,6 @@ import {
   Film,
   Scissors,
   Sparkles,
-  Lock,
-  Unlock,
   Wrench
 } from 'lucide-react';
 import type { AnalyzeResponse, ViralClip, RenderSettings, BatchRenderProgress, SourcePrepProgress } from './types';
