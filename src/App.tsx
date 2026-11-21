@@ -11,6 +11,7 @@ import { isMobileDevice, requestWakeLock, releaseWakeLock } from './utils/device
 import { LayoutMetricsSync } from './utils/layoutMetricsSync';
 import { useLanguage } from './locales';
 import { HackerApiKeyInput } from './components/HackerApiKeyInput';
+import { CloudWorkspacePanel } from './components/CloudWorkspacePanel';
 
 // Lazy-loaded modal and heavy studio components to minimize initial bundle size and speed up page load
 const ClipStudioSection = lazy(() =>
@@ -3381,6 +3382,7 @@ Transcript:
 
   return (
     <>
+      <CloudWorkspacePanel />
       {/* Toast Notification */}
       {toastMessage && (
         <div className="toast-msg" role="status" aria-live="polite">
