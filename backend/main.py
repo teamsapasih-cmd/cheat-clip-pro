@@ -20,6 +20,7 @@ from backend.routers import (
 from backend.routers.auth import router as auth_router
 from backend.routers.projects import router as projects_router
 from backend.routers.cloud_media import router as cloud_media_router
+from backend.routers.analysis_jobs import router as analysis_jobs_router
 # Re-exports for backwards compatibility
 from backend.schemas.analyze import (
     AnalyzeRequest,
@@ -155,6 +156,7 @@ app.include_router(system_router)
 app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(cloud_media_router)
+app.include_router(analysis_jobs_router)
 
 # Mount built frontend in production container if dist/ exists
 from pathlib import Path

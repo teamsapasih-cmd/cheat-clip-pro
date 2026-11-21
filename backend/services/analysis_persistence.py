@@ -40,6 +40,8 @@ def persist_analysis_result(
         raise ValueError("Analysis clips and transcript must be arrays")
 
     analysis.status = "completed"
+    analysis.progress_percent = 100
+    analysis.error_message = None
     analysis.provider = str(result.get("provider") or "")[:80] or analysis.provider
     analysis.model = str(result.get("model") or "")[:120] or analysis.model
     analysis.summary = str(result.get("summary") or "")
