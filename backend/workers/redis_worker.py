@@ -7,6 +7,7 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from backend.cloud.factory import build_object_storage
+from backend.cloud.settings import validate_production_configuration
 from backend.cloud.redis_queue import RedisStreamJobQueue
 from backend.database.models import Analysis, MediaAsset
 from backend.database.session import build_engine, build_session_factory
@@ -94,6 +95,7 @@ def _run_analysis(payload, queue):
         if temp_path and os.path.exists(temp_path): os.unlink(temp_path)
 
 def run_worker(handlers: dict[str, Handler] | None = None) -> None:
+    validate_production_configuration()
     queue = RedisStreamJobQueue.from_env()
     consumer = os.environ.get("WORKER_NAME") or socket.gethostname()
     registered = {"analysis.persist_result": _persist_analysis_result, "analysis.run": lambda payload: _run_analysis(payload, queue)}

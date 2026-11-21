@@ -22,6 +22,7 @@ from backend.routers.projects import router as projects_router
 from backend.routers.cloud_media import router as cloud_media_router
 from backend.routers.analysis_jobs import router as analysis_jobs_router
 from backend.routers.health import router as cloud_health_router
+from backend.cloud.settings import validate_production_configuration
 # Re-exports for backwards compatibility
 from backend.schemas.analyze import (
     AnalyzeRequest,
@@ -80,6 +81,7 @@ from fastapi.responses import JSONResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_production_configuration()
     # Ensure all logger handlers (including Uvicorn) have the security masking filter attached
     install_security_logging()
     # Startup: spawn auto-cleanup background task

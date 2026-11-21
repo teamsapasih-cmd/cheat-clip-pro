@@ -1,6 +1,7 @@
 """Cloud readiness and liveness probes for container hosting."""
 from __future__ import annotations
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from backend.cloud.factory import build_job_queue, build_object_storage
 from backend.database.session import build_engine
@@ -37,4 +38,5 @@ def readiness():
     except Exception:
         checks["object_storage"] = "unavailable"
     ready = all(value == "ok" for value in checks.values())
-    return {"status": "ready" if ready else "not_ready", "checks": checks}
+    body = {"status": "ready" if ready else "not_ready", "checks": checks}
+    return body if ready else JSONResponse(status_code=503, content=body)

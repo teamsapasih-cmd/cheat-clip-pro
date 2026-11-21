@@ -67,7 +67,12 @@ def validate_production_configuration(env: Mapping[str, str] | None = None) -> N
     if strict not in {"1", "true", "yes"}:
         return
 
-    missing = CloudSettings.from_env(source).missing_components()
+    missing = list(CloudSettings.from_env(source).missing_components())
+    jwt_secret = source.get("JWT_SECRET_KEY", "").strip()
+    if len(jwt_secret) < 32:
+        missing.append("JWT_SECRET_KEY (minimum 32 characters)")
+    if not (source.get("GEMINI_API_KEY", "").strip() or source.get("OPENROUTER_API_KEY", "").strip()):
+        missing.append("GEMINI_API_KEY or OPENROUTER_API_KEY")
     if missing:
         raise RuntimeError(
             "Cloud infrastructure configuration is incomplete. Missing: "
