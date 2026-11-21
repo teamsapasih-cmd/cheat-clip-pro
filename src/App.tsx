@@ -1018,8 +1018,9 @@ export default function App() {
             file_name_suffix: settings.fileNameSuffix || '',
             title_position: settings.titlePosition,
             title_duration: settings.titleDuration || 'entire',
-            subtitles_enabled: false,
-            caption_style: 'none',
+            // Use the Auto Clipper word-animation setting; Supadata transcript is not sent to rendering.
+            subtitles_enabled: settings.subtitlesEnabled !== false && settings.captionStyle !== 'none',
+            caption_style: settings.subtitlesEnabled === false ? 'none' : settings.captionStyle,
             caption_font: settings.captionFont,
             title_font: settings.titleFont || settings.captionFont || 'Outfit',
             font_size: settings.fontSize,
