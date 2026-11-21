@@ -970,9 +970,18 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
               try {
                 event.target.mute();
                 setIsMuted(true);
+                // Keep YouTube's native caption track disabled; the studio draws
+                // its own editable subtitle overlay from the analysis transcript.
                 if (typeof event.target.unloadModule === 'function') {
                   event.target.unloadModule('captions');
                   event.target.unloadModule('cc');
+                }
+                if (typeof event.target.setOption === 'function') {
+                  try {
+                    event.target.setOption('captions', 'track', {});
+                  } catch (captionOptionError) {
+                    // Some embedded videos do not expose the captions module.
+                  }
                 }
                 event.target.seekTo(clipStart, true);
                 setCurrentTime(clipStart);
