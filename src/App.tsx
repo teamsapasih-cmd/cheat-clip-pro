@@ -403,24 +403,11 @@ export default function App() {
     return true;
   }, [sourceMode, result?.source_type, result?.video_id, result?.video_url]);
 
-  const handleStartBatchRender = async (settings: RenderSettings, forceProceed = false) => {
+  const handleStartBatchRender = async (settings: RenderSettings) => {
     if (!result) return;
 
-    if (!forceProceed && isCurrentVideoYouTube() && !hasStoredCookies()) {
-      const skipped = sessionStorage.getItem('cheatclip_skip_cookie_warning') === 'true';
-      if (!skipped) {
-        setCookieWarningState({
-          isOpen: true,
-          actionType: 'render',
-          onProceed: () => {
-            setCookieWarningState(prev => ({ ...prev, isOpen: false }));
-            handleStartBatchRender(settings, true);
-          }
-        });
-        return;
-      }
-    }
-
+    // Rendering can be attempted without browser cookies.
+    // Cookies remain optional and are only sent when the user has configured them.
     setIsLaunchingRender(true);
 
     const isClientMode = !isMobileDevice() && (
