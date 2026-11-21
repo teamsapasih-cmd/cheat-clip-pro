@@ -888,7 +888,7 @@ async def process_batch_rendering(batch_id: str, request: RenderBatchRequest):
                         clip=clip,
                         settings=settings,
                         target_url=target_url,
-                        transcript=request.transcript,
+                        transcript=None,
                         total_clips=len(clips),
                         cookies_content=cookies_content
                     )
@@ -961,7 +961,7 @@ async def process_batch_retry(batch_id: str, clip_indices: List[int]):
                     clips=clips,
                     settings=settings,
                     target_url=target_url,
-                    transcript=request.transcript,
+                    transcript=None,
                     cookies_content=cookies_content
                 )
                 batch["current_clip_index"] = 1
@@ -977,7 +977,7 @@ async def process_batch_retry(batch_id: str, clip_indices: List[int]):
                             clip=clips[idx],
                             settings=settings,
                             target_url=target_url,
-                            transcript=request.transcript,
+                            transcript=None,
                             total_clips=len(clips),
                             cookies_content=cookies_content
                         )
