@@ -65,12 +65,16 @@ def register(body: RegisterRequest, db: Session = Depends(get_db_session)):
     )
     db.add(user)
     try:
+        db.flush()
+        token = _issue_token(user.id)
         db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
     db.refresh(user)
-    token = _issue_token(user.id)
     return TokenResponse(
         access_token=token,
         expires_in=_ACCESS_TOKEN_SECONDS,
