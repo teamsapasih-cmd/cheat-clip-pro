@@ -1697,7 +1697,7 @@ def download_full_raw_video(
             if use_cookies:
                 logger.warning(f"Full raw video download with cookies exited with code {returncode}. Retrying in guest mode...")
 
-    raise RuntimeError("Failed to download raw video. Please check your cookies or network connection.")
+    raise RuntimeError("YouTube did not allow the server to download this video. Upload a video file that you own or have permission to use, then render again.")
 
 
 def clean_caption_text(text: str) -> str:
