@@ -630,155 +630,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const clipEnd = currentPreviewClip ? currentPreviewClip.end_time : 60;
   const clipDuration = Math.max(1, clipEnd - clipStart);
 
-  // Precompute and partition caption words/chunks for currentPreviewClip
-  const captionChunks = useMemo<CaptionChunk[]>(() => {
-    if (!currentPreviewClip) return [];
-    const clipStart = currentPreviewClip.start_time;
-    const clipEnd = currentPreviewClip.end_time;
-
-    const allWords: CaptionWord[] = [];
-
-    // 1. Primary: Extract from timestamped transcript lines
-    if (transcript && transcript.length > 0) {
-      const relevantLines = transcript.filter(line => {
-        const lStart = line.start;
-        const lEnd = (typeof line.end === 'number' && line.end > lStart) ? line.end : (lStart + ((line as any).duration || 2.0));
-        return lEnd >= clipStart - 0.5 && lStart <= clipEnd + 0.5;
-      });
-
-      for (const line of relevantLines) {
-        const cleaned = cleanCaptionText(line.text || '');
-        if (!cleaned) continue;
-        const lStart = line.start;
-        const lEnd = (typeof line.end === 'number' && line.end > lStart) ? line.end : (lStart + ((line as any).duration || 2.0));
-        const tokens = cleaned.split(/\s+/).filter(Boolean);
-        if (!tokens.length) continue;
-
-        // Natural speech duration calibration:
-        // Respect the actual sentence duration unless trailing silence is detected
-        const rawLineDur = Math.max(0.4, lEnd - lStart);
-        const maxPlausibleDur = tokens.length * 0.52 + 0.25;
-        const spokenDuration = Math.min(rawLineDur, maxPlausibleDur);
-
-        const tokenWeights = tokens.map(t => Math.max(2, t.replace(/[^a-zA-Z0-9]/g, '').length || t.length));
-        const totalWeight = tokenWeights.reduce((a, b) => a + b, 0);
-
-        let curTime = lStart;
-        tokens.forEach((tok, idx) => {
-          const ratio = tokenWeights[idx] / Math.max(1, totalWeight);
-          const wDur = Math.max(0.14, Math.min(0.60, spokenDuration * ratio));
-          const wStart = curTime;
-          const wEnd = wStart + wDur;
-          curTime = wEnd;
-
-          allWords.push({
-            text: tok,
-            start: wStart,
-            end: wEnd,
-          });
-        });
-      }
-    }
-
-    // 2. Fallback: If no transcript lines found, use currentPreviewClip.transcript (string)
-    if (allWords.length === 0 && currentPreviewClip.transcript) {
-      const cleaned = cleanCaptionText(currentPreviewClip.transcript);
-      const tokens = cleaned.split(/\s+/).filter(Boolean);
-      if (tokens.length > 0) {
-        const duration = Math.max(1, clipEnd - clipStart);
-        const maxPlausibleDur = tokens.length * 0.52 + 0.25;
-        const spokenDuration = Math.min(duration, maxPlausibleDur);
-        const tokenWeights = tokens.map(t => Math.max(2, t.replace(/[^a-zA-Z0-9]/g, '').length || t.length));
-        const totalWeight = tokenWeights.reduce((a, b) => a + b, 0);
-
-        let curTime = clipStart;
-        tokens.forEach((tok, idx) => {
-          const ratio = tokenWeights[idx] / Math.max(1, totalWeight);
-          const wDur = Math.max(0.14, Math.min(0.60, spokenDuration * ratio));
-          const wStart = curTime;
-          const wEnd = wStart + wDur;
-          curTime = wEnd;
-
-          allWords.push({
-            text: tok,
-            start: wStart,
-            end: wEnd,
-          });
-        });
-      }
-    }
-
-    if (allWords.length === 0) return [];
-
-    // Group words into punchy chunks of 1 to 3 words (max 18 chars), splitting on punctuation or pauses >= 0.28s
-    const chunks: CaptionChunk[] = [];
-    let currentWords: CaptionWord[] = [];
-    let currentChars = 0;
-
-    for (const w of allWords) {
-      const wLen = w.text.length;
-      const hasPause = currentWords.length > 0 && (w.start - currentWords[currentWords.length - 1].end >= 0.28);
-      const endsSentence = currentWords.length > 0 && /[.?!,]$/.test(currentWords[currentWords.length - 1].text);
-
-      if (currentWords.length >= 3 || hasPause || endsSentence || (currentWords.length > 0 && currentChars + wLen > 18)) {
-        chunks.push({
-          words: currentWords,
-          start: currentWords[0].start,
-          end: currentWords[currentWords.length - 1].end,
-        });
-        currentWords = [w];
-        currentChars = wLen;
-      } else {
-        currentWords.push(w);
-        currentChars += wLen + 1;
-      }
-    }
-    if (currentWords.length > 0) {
-      chunks.push({
-        words: currentWords,
-        start: currentWords[0].start,
-        end: currentWords[currentWords.length - 1].end,
-      });
-    }
-
-    return chunks;
-  }, [transcript, currentPreviewClip]);
-
-  // Compute active chunk and word index for currentTime with user-adjustable sync offset
-  const activeCaption = useMemo(() => {
-    if (!captionChunks.length) return null;
-
-    // Apply user-adjustable sync offset: positive means captions appear later; negative means earlier
-    const playhead = currentTime - subtitleOffsetSeconds;
-
-    const activeChunk = captionChunks.find(c => playhead >= (c.start - 0.06) && playhead <= (c.end + 0.25));
-    if (activeChunk) {
-      const activeIdx = activeChunk.words.findIndex(w => playhead >= w.start && playhead <= w.end);
-      const wordIndex = activeIdx !== -1 ? activeIdx : (playhead > activeChunk.words[activeChunk.words.length - 1].end ? activeChunk.words.length - 1 : 0);
-      return { chunk: activeChunk, activeWordIndex: wordIndex };
-    }
-
-    // When paused outside active speech, find closest chunk
-    if (!isPlaying) {
-      let closest: CaptionChunk | null = null;
-      let minDiff = Infinity;
-      for (const c of captionChunks) {
-        const diff = Math.min(Math.abs(playhead - c.start), Math.abs(playhead - c.end));
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = c;
-        }
-      }
-      if (closest && minDiff < 2.0) {
-        const wordIndex = playhead >= closest.end ? closest.words.length - 1 : 0;
-        return { chunk: closest, activeWordIndex: wordIndex };
-      }
-    }
-
-    return null;
-  }, [captionChunks, currentTime, subtitleOffsetSeconds, isPlaying]);
-
-
+  // Supadata transcript is analysis metadata only; Auto Clipper preview has no transcript subtitle overlay.
+  const captionChunks = useMemo<CaptionChunk[]>(() => [], []);
+  const activeCaption = null;
 
   // Fetch face/object detection coordinates
   useEffect(() => {
@@ -1909,8 +1763,8 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
       titleFontSize,
       titleFontSizePx,
       titleTextCase,
-      subtitlesEnabled: captionStyle !== 'none',
-      captionStyle,
+      subtitlesEnabled: false,
+      captionStyle: 'none',
       captionFont,
       fontSize,
       fontSizePx,
@@ -1948,7 +1802,7 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
       originalAudioVolume,
       // Hardware Acceleration / Video Encoder
       hardwareAccel,
-      renderEngine: isMobileDevice() ? 'server' : ((hardwareAccel === 'browser_wasm' || hardwareAccel === 'client_gpu') ? 'client' : 'server'),
+      renderEngine: 'server',
       // Multi-Segment Merged Highlight Video
       renderMode,
       compilationTitle: compilationTitle.trim() || undefined,
