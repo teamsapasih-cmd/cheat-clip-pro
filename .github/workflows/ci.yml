@@ -64,7 +64,7 @@ jobs:
         run: python -m pytest -q tests/test_database_models.py
 
       - name: Test authentication primitives
-        run: python -m pytest -q tests/test_auth_tokens.py
+        run: python -m pytest -q tests/test_auth_tokens.py tests/test_auth_api.py
 
       - name: Verify Alembic initial migration
         env:
