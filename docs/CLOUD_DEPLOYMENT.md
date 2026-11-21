@@ -57,7 +57,7 @@ Do not mark production-ready until end-to-end upload, worker execution, retries,
 
 Large binary objects are temporary by default:
 - Original uploaded source media: deleted 7 days after upload verification; successful analysis refreshes the expiry to 7 days after analysis completion.
-- Rendered exports: deleted when their `expires_at` timestamp is reached. Render/export creation must set this timestamp (default 7 days).
+- Cloud exports represented by `ExportedVideo`: deleted when their `expires_at` timestamp is reached. The cleanup worker supports this and preserves the database record. However, the existing legacy `/api/render-batch` flow still writes files to local `EXPORTS_DIR` and is not yet connected to `ExportedVideo` or private object storage; those legacy files are not covered by this cloud retention worker.
 - Worker temporary files: deleted immediately after each analysis attempt, including failed attempts.
 - Analysis metadata, transcript text, clip suggestions and project/editing metadata remain in PostgreSQL; they are comparatively small and preserve useful work. A separate account-level retention policy can later expire these records (default 90 days) with user-visible notice and export options.
 - Assets with queued or processing analysis jobs are never deleted by the retention sweep.
@@ -66,6 +66,6 @@ Large binary objects are temporary by default:
 Environment variables:
 - `SOURCE_MEDIA_RETENTION_DAYS=7`
 - `RETENTION_SWEEP_INTERVAL_SECONDS=900`
-- Render/export services should set `expires_at` to `now + EXPORT_RETENTION_DAYS` (default 7 days).
+- A future cloud export persistence path must set `ExportedVideo.expires_at` to `now + EXPORT_RETENTION_DAYS` (default 7 days) when it stores an export object. Do not assume legacy local render files are automatically cleaned by this worker.
 
 Retention cleanup runs in the dedicated worker; no extra scheduler or local installation is required.

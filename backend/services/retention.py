@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from backend.database.models import ExportedVideo, MediaAsset
+from backend.database.models import Analysis, ExportedVideo, MediaAsset
 
 logger = logging.getLogger("clipstudio.retention")
 
@@ -77,6 +77,3 @@ def run_retention_sweep(db: Session, storage, *, now: datetime | None = None, li
     db.commit()
     return {"source_media_deleted": deleted_media, "exports_deleted": deleted_exports, "failed": failed}
 
-
-# Import late to keep the model dependency visible and avoid worker startup cycles.
-from backend.database.models import Analysis

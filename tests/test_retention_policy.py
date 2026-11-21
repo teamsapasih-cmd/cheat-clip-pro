@@ -58,3 +58,56 @@ def test_active_analysis_prevents_source_media_deletion():
     assert result["source_media_deleted"] == 0
     assert storage.deleted == []
     db.close()
+
+
+def test_expired_export_object_is_deleted_and_record_is_preserved():
+    db = make_db()
+    now = datetime.now(timezone.utc)
+    user = User(email="export-retention@example.com")
+    db.add(user); db.flush()
+    project = Project(owner_id=user.id, name="Exports")
+    db.add(project); db.flush()
+    render_job = __import__("backend.database.models", fromlist=["RenderJob"]).RenderJob(
+        owner_id=user.id, project_id=project.id, status="completed"
+    )
+    db.add(render_job); db.flush()
+    export = ExportedVideo(
+        owner_id=user.id, render_job_id=render_job.id,
+        storage_key="users/u/exports/final.mp4", filename="final.mp4",
+        expires_at=now - timedelta(hours=1),
+    )
+    db.add(export); db.commit()
+    storage = FakeStorage()
+
+    result = run_retention_sweep(db, storage, now=now)
+
+    assert result["exports_deleted"] == 1
+    assert storage.deleted == ["users/u/exports/final.mp4"]
+    db.refresh(export)
+    assert export.storage_deleted_at == now
+    assert db.get(ExportedVideo, export.id) is not None
+    db.close()
+
+
+def test_export_without_expiry_is_not_deleted():
+    db = make_db()
+    user = User(email="keep-export@example.com")
+    db.add(user); db.flush()
+    project = Project(owner_id=user.id, name="Keep")
+    db.add(project); db.flush()
+    from backend.database.models import RenderJob
+    job = RenderJob(owner_id=user.id, project_id=project.id, status="completed")
+    db.add(job); db.flush()
+    export = ExportedVideo(
+        owner_id=user.id, render_job_id=job.id,
+        storage_key="users/u/exports/keep.mp4", filename="keep.mp4",
+    )
+    db.add(export); db.commit()
+    storage = FakeStorage()
+
+    result = run_retention_sweep(db, storage)
+
+    assert result["exports_deleted"] == 0
+    assert storage.deleted == []
+    assert export.storage_deleted_at is None
+    db.close()
