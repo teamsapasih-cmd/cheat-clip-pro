@@ -20,7 +20,6 @@ import { useLanguage } from '../locales';
 import { resilientFetch } from '../utils/api';
 import { getStoredCookies, hasStoredCookies } from '../utils/cookieUtils';
 import { detectFaceClientSide } from '../utils/clientFaceDetector';
-import { isMobileDevice } from '../utils/deviceUtils';
 import { isWebCodecsGpuSupported } from '../services/webcodecsRenderer';
 import type {
   ViralClip,
@@ -44,46 +43,6 @@ import type {
   TranscriptLine,
 } from '../types';
 import { getFontWeightForFamily, getFontFamilyWithFallback, wrapTitleSmart } from '../services/captionUtils';
-
-interface CaptionWord {
-  text: string;
-  start: number;
-  end: number;
-}
-
-interface CaptionChunk {
-  words: CaptionWord[];
-  start: number;
-  end: number;
-}
-
-function cleanCaptionText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\[.*?\]|\(.*?\)|[*].*?[*]/g, ' ')
-    .replace(/\b(laughter|applause|music|cheering|snickering|giggle|cough)\b/gi, ' ')
-    .replace(/^\s*[\.,…:;]+\s*/, '')
-    .replace(/\s*[\.,…:;]+\s*$/, '')
-    .replace(/[^\w\s.,%&$?]|_/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const CAPTION_STYLE_CONFIG: Record<CaptionStyle, { highlight: string; sample: [string, string] }> = {
-  viral_pop: { highlight: '#FFE600', sample: ['VIRAL', 'POP'] },
-  beast_punch: { highlight: '#00FF66', sample: ['UNREAL', 'HACK'] },
-  cyber_violet: { highlight: '#D946EF', sample: ['CYBER', 'PUNCH'] },
-  fire_red: { highlight: '#FF2E2E', sample: ['HOT', 'FIRE'] },
-  electric_cyan: { highlight: '#00F0FF', sample: ['ELECTRIC', 'CYAN'] },
-  golden_aura: { highlight: '#FFB800', sample: ['GOLDEN', 'MOMENT'] },
-  clean_minimal: { highlight: '#38BDF8', sample: ['CLEAN', 'SUBTITLE'] },
-  none: { highlight: '#FFFFFF', sample: ['', ''] },
-};
 
 interface ClipStudioSectionProps {
   videoUrl: string;
@@ -358,7 +317,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   allowAppUpdates = false,
   onOpenCookiesModal,
   onBackToClips,
-  transcript = [],
 }) => {
   const { t } = useLanguage();
   const isYouTube = !videoId?.startsWith('upload_') && !videoId?.startsWith('gdrive_') && !videoId?.startsWith('twitch_') && !videoUrl?.includes('/api/video') && !videoUrl?.includes('twitch.tv');
@@ -630,9 +588,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const clipEnd = currentPreviewClip ? currentPreviewClip.end_time : 60;
   const clipDuration = Math.max(1, clipEnd - clipStart);
 
-  // Supadata transcript is analysis metadata only; Auto Clipper preview has no transcript subtitle overlay.
-  const captionChunks = useMemo<CaptionChunk[]>(() => [], []);
-  const activeCaption = null;
 
   // Fetch face/object detection coordinates
   useEffect(() => {
@@ -4746,84 +4701,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
                     </div>
                   );
                 })()}
-
-                {/* Subtitle Overlay with Real-time Up/Down Position & Scaled Font */}
-                {captionStyle !== 'none' && (
-                  <div
-                    className={`wireframe-caption-overlay style-${captionStyle}${subtitlePositionMode === 'center' ? ' mode-center' : ''}`}
-                    style={{
-                      ...(subtitlePositionMode === 'center'
-                        ? {
-                            top: `${safeSubCenterY}%`,
-                            bottom: 'auto',
-                            transform: 'translateY(-50%)',
-                          }
-                        : {
-                            bottom: `${safeSubtitleY}%`,
-                            top: 'auto',
-                            transform: 'none',
-                          }),
-                      zIndex: 35,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <span
-                      className="wireframe-caption-text"
-                      style={{
-                        fontFamily: getFontFamilyWithFallback(captionFont),
-                        fontSize: (() => {
-                          const scale = isLandscape ? (320 / 1920) : (320 / 1080);
-                          const px = Math.round(fontSizePx * scale);
-                          const minPx = 4;
-                          return `${Math.max(minPx, px)}px`;
-                        })(),
-                        fontWeight: getFontWeightForFamily(captionFont) as any,
-                        letterSpacing: '0.03em',
-                        textAlign: 'center',
-                        textShadow: '0 0 2px #000, 0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.8)',
-                        display: 'inline-block',
-                      }}
-                    >
-                      {activeCaption ? (
-                        activeCaption.chunk.words.map((w, idx) => {
-                          const isActive = idx === activeCaption.activeWordIndex;
-                          const currentStyle = CAPTION_STYLE_CONFIG[captionStyle] || CAPTION_STYLE_CONFIG.viral_pop;
-                          const color = isActive ? currentStyle.highlight : '#ffffff';
-                          return (
-                            <React.Fragment key={idx}>
-                              {idx > 0 && ' '}
-                              <span
-                                style={{
-                                  color,
-                                  transform: isActive ? 'scale(1.08)' : 'scale(1)',
-                                  display: 'inline-block',
-                                  transition: 'transform 0.08s ease, color 0.08s ease',
-                                  textShadow: isActive
-                                    ? `0 0 3px #000, 0 1px 4px rgba(0,0,0,0.95), 0 0 8px ${currentStyle.highlight}88`
-                                    : '0 0 2px #000, 0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.8)',
-                                }}
-                              >
-                                {applyLetterCase(w.text, textCase)}
-                              </span>
-                            </React.Fragment>
-                          );
-                        })
-                      ) : isPlaying ? (
-                        null
-                      ) : (
-                        (() => {
-                          const currentStyle = CAPTION_STYLE_CONFIG[captionStyle] || CAPTION_STYLE_CONFIG.viral_pop;
-                          return (
-                            <>
-                              <span style={{ color: '#ffffff' }}>{applyLetterCase(currentStyle.sample[0], textCase)}</span>{' '}
-                              <span style={{ color: currentStyle.highlight }}>{applyLetterCase(currentStyle.sample[1], textCase)}</span>
-                            </>
-                          );
-                        })()
-                      )}
-                    </span>
-                  </div>
-                )}
 
                 {/* Real-time Watermark Overlay */}
                 {watermarkEnabled && (
