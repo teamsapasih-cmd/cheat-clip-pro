@@ -108,3 +108,10 @@ def test_registration_fails_safely_when_jwt_secret_is_missing(client: TestClient
     )
     assert response.status_code == 503
     assert "not configured" in response.json()["detail"]
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-that-is-at-least-thirty-two-characters")
+    retry = client.post(
+        "/api/auth/register",
+        json={"email": "secret-missing@example.test", "password": "a-strong-password-123"},
+    )
+    assert retry.status_code == 201, retry.text
