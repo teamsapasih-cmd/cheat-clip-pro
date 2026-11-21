@@ -703,7 +703,7 @@ async def render_merged_batch_clips(
                 logger.warning(f"Could not render color emoji title overlay for merged clip: {ex}")
                 skip_ass_title = False
 
-        if settings.caption_style != "none" or (display_title and settings.title_position != "none" and not skip_ass_title):
+        if subtitles_active or (display_title and settings.title_position != "none" and not skip_ass_title):
             ass_filename = f"{batch_id}_merged.ass"
             ass_path = str(TEMP_DIR / ass_filename)
             await asyncio.to_thread(
