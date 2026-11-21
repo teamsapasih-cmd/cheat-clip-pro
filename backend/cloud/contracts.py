@@ -43,6 +43,10 @@ class ObjectStorage(Protocol):
         """Delete an object after authorization and retention checks."""
         ...
 
+    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
+        """Create a short-lived signed URL for a direct client upload."""
+        ...
+
 
 class JobQueue(Protocol):
     def enqueue(self, job_type: str, payload: dict[str, object]) -> JobReceipt:
