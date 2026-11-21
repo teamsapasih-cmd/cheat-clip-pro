@@ -336,18 +336,22 @@ async def analyze_video(request: AnalyzeRequest):
     """Stream real-time progress via Server-Sent Events, then deliver the final result."""
 
     async def stream():
-        api_provider = (request.api_provider or "gemini").lower().strip()
-        gemini_key = (request.api_key or os.environ.get("GEMINI_API_KEY") or '').strip()
-        openrouter_key = (request.openrouter_key or request.api_key or os.environ.get("OPENROUTER_API_KEY") or '').strip()
-        is_mock = (gemini_key.lower() == "mock") if api_provider == "gemini" else False
+        # Provider and credentials are controlled by Railway environment variables only.
+        # Never accept AI provider secrets from browser requests.
+        api_provider = os.environ.get("AI_PROVIDER", "gemini").lower().strip()
+        if api_provider not in {"gemini", "openrouter"}:
+            api_provider = "gemini"
+        gemini_key = (os.environ.get("GEMINI_API_KEY") or '').strip()
+        openrouter_key = (os.environ.get("OPENROUTER_API_KEY") or '').strip()
+        is_mock = False
 
         if api_provider == "openrouter":
             if not openrouter_key:
-                yield _sse({"error": "OpenRouter API Key is required. Please enter it in AI Engine Settings.", "status": 400})
+                yield _sse({"error": "AI service is not configured on the server. Please contact the administrator.", "status": 503})
                 return
         else:
             if not gemini_key:
-                yield _sse({"error": "Gemini API Key is required. Enter it in the web interface.", "status": 400})
+                yield _sse({"error": "AI service is not configured on the server. Please contact the administrator.", "status": 503})
                 return
 
         # ── Step 1: Detect Source Type & Extract Metadata ───────────────────
