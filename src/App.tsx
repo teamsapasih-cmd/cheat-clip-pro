@@ -3284,18 +3284,16 @@ Transcript:
         </div>
       )}
 
-      {/* Full-Width Cyber Header Bar (johansa.com style - Edge-to-Edge Solid Dark) */}
+      {/* Clip Intelligence Studio — first-party product header */}
       <div className="app-header-wrapper">
         <div className="app-header-inner">
           <header className="app-header">
             <div className="header-logo">
               <div>
                 <div className="logo-title-row">
-                  <span className="prompt-marker">
-                    &gt;_
-                  </span>
+                  <span className="prompt-marker" aria-hidden="true"><Film size={21} strokeWidth={2.2} /></span>
                   <h1 className="logo-title">
-                    CHEAT CLIP PRO
+                    CLIP INTELLIGENCE STUDIO
                   </h1>
                   <span className="status-dot" title="Online"></span>
                 </div>
@@ -3354,16 +3352,7 @@ Transcript:
                 </button>
               )}
               <LanguageSwitcher />
-              <a
-                href="https://tako.id/johansa"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="header-nav-btn support-btn"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              >
-                <Heart size={13} /> {t.header.supportProject}
-              </a>
-            </div>
+</div>
           </header>
         </div>
       </div>
