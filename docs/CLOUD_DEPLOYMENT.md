@@ -18,10 +18,10 @@ Both use the root Dockerfile image.
 
 - `DATABASE_URL`: Supabase PostgreSQL connection string. Prefer the Supabase Session Pooler (port 5432) for persistent application/worker connections; require SSL.
 - `REDIS_URL`: private Redis connection URL from the Railway Redis service.
-- `OBJECT_STORAGE_ENDPOINT`: Supabase S3 endpoint for 50 MB smoke tests, or Cloudflare R2 endpoint for large videos.
-- `OBJECT_STORAGE_REGION`: `ap-south-1` for Supabase or `auto` for R2.
-- `OBJECT_STORAGE_BUCKET`: `clipstudio-private-media`
-- `OBJECT_STORAGE_ACCESS_KEY` and `OBJECT_STORAGE_SECRET_KEY`: generated under Supabase Dashboard → Storage → S3 Configuration → Access keys.
+- `OBJECT_STORAGE_ENDPOINT`: `https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com`.
+- `OBJECT_STORAGE_REGION`: `auto`.
+- `OBJECT_STORAGE_BUCKET`: `clipstudio-private-media` (private R2 bucket).
+- `OBJECT_STORAGE_ACCESS_KEY` and `OBJECT_STORAGE_SECRET_KEY`: generated in Cloudflare R2 → Manage R2 API Tokens / S3 credentials. Give the token Object Read & Write access only to this bucket.
 - `JWT_SECRET_KEY`: long random secret (at least 32 random bytes).
 - `GEMINI_API_KEY`: provider key for the worker, unless the request uses OpenRouter.
 - `CLOUD_REQUIRE_INFRASTRUCTURE`: `1`
@@ -34,7 +34,7 @@ Never commit real values or send credentials in chat. Configure secrets only in 
 
 A private bucket `clipstudio-private-media` exists in Supabase Storage. Its bucket-level cap is 2 GiB, but the connected Supabase organization is currently on the Free plan: Supabase enforces a **50 MB global upload limit** on Free projects. The effective limit is the lower of the global and bucket limits.
 
-For initial smoke tests, keep `MAX_CLOUD_UPLOAD_BYTES=52428800` (50 MB) and use the Supabase S3 endpoint. For the intended large-video workflow, use an S3-compatible provider such as Cloudflare R2 and set `MAX_CLOUD_UPLOAD_BYTES=2147483648` (2 GiB) after creating the bucket and credentials. R2 uses endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, region `auto`, and a private bucket named `clipstudio-private-media`.
+The intended large-video workflow uses Cloudflare R2. Create a private bucket named `clipstudio-private-media`, create a scoped S3 API token with Object Read & Write access to that bucket only, and set `MAX_CLOUD_UPLOAD_BYTES=2147483648` (2 GiB). R2 uses endpoint `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` and region `auto`. Supabase remains the PostgreSQL database; its S3 credentials are not interchangeable with R2 credentials. Supabase Free has a 50 MB global upload limit, so it is not the target for large media objects.
 
 S3 access keys are separate from Supabase publishable/anon keys. Never put them in Git or chat.
 
