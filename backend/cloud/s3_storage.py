@@ -28,25 +28,33 @@ class S3ObjectStorage:
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             region_name=region or "auto",
-            config=Config(signature_version="s3v4", retries={"max_attempts": 4}),
+            # Supabase Storage S3 requires path-style bucket addressing.
+            # Virtual-host style can produce invalid bucket hostnames/signatures.
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                retries={"max_attempts": 4},
+            ),
         )
 
     @classmethod
     def from_env(cls) -> "S3ObjectStorage":
         required = [
+            "OBJECT_STORAGE_ENDPOINT",
             "OBJECT_STORAGE_BUCKET",
             "OBJECT_STORAGE_ACCESS_KEY",
             "OBJECT_STORAGE_SECRET_KEY",
+            "OBJECT_STORAGE_REGION",
         ]
-        missing = [key for key in required if not os.environ.get(key)]
+        missing = [key for key in required if not os.environ.get(key, "").strip()]
         if missing:
             raise RuntimeError("Missing object storage settings: " + ", ".join(missing))
         return cls(
-            endpoint_url=os.environ.get("OBJECT_STORAGE_ENDPOINT", ""),
-            bucket=os.environ["OBJECT_STORAGE_BUCKET"],
-            access_key=os.environ["OBJECT_STORAGE_ACCESS_KEY"],
-            secret_key=os.environ["OBJECT_STORAGE_SECRET_KEY"],
-            region=os.environ.get("OBJECT_STORAGE_REGION"),
+            endpoint_url=os.environ["OBJECT_STORAGE_ENDPOINT"].strip().rstrip("/"),
+            bucket=os.environ["OBJECT_STORAGE_BUCKET"].strip(),
+            access_key=os.environ["OBJECT_STORAGE_ACCESS_KEY"].strip(),
+            secret_key=os.environ["OBJECT_STORAGE_SECRET_KEY"].strip(),
+            region=os.environ["OBJECT_STORAGE_REGION"].strip(),
         )
 
     def put(self, key: str, body: BinaryIO, content_type: str) -> StoredObject:
