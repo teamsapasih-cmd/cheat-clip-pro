@@ -109,8 +109,12 @@ def run_worker(handlers: dict[str, Handler] | None = None) -> None:
     while True:
         if time.monotonic() >= next_retention_sweep:
             try:
-                summary = run_retention_sweep(_session_factory()(), build_object_storage())
-                logger.info("Retention sweep: %s", summary)
+                retention_db = _session_factory()()
+                try:
+                    summary = run_retention_sweep(retention_db, build_object_storage())
+                    logger.info("Retention sweep: %s", summary)
+                finally:
+                    retention_db.close()
             except Exception:
                 logger.exception("Retention sweep failed; it will retry next interval")
             finally:
