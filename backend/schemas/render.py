@@ -14,7 +14,7 @@ class RenderSettingsModel(BaseModel):
     file_name_suffix: Optional[str] = ""
     title_position: str = "auto"
     title_duration: Optional[str] = "entire"
-    # Analysis transcript is metadata only; generated subtitles stay off unless explicitly enabled.
+    # Legacy analysis transcript is accepted for request compatibility only; render captions are always audio-transcribed.
     subtitles_enabled: Optional[bool] = False
     caption_style: str = "none"
     caption_font: str = "Outfit"
