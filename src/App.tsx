@@ -4405,9 +4405,9 @@ Transcript:
               <div className="server-ai-card">
                 <div className="server-ai-icon">✦</div>
                 <div>
-                  <h3>AI analysis is ready when you are</h3>
-                  <p>AI engine is managed securely by Clip Intelligence Studio. You only need to provide a YouTube link.</p>
-                  <span className="server-ai-status"><span /> Server-managed AI · No API key required</span>
+                  <h3>AI engine dikelola otomatis</h3>
+                  <p>Cukup masukkan link YouTube. Kunci AI disimpan di server dan tidak perlu dimasukkan atau ditampilkan di browser.</p>
+                  <span className="server-ai-status"><span /> Server-managed AI · Tidak perlu input API key</span>
                 </div>
               </div>
 
