@@ -405,17 +405,18 @@ export default function App() {
 
   const handleStartBatchRender = async (settings: RenderSettings) => {
     if (!result) return;
+    if (!Array.isArray(settings.selectedClips) || settings.selectedClips.length === 0) {
+      alert('Pilih minimal satu klip di Bagian 02 sebelum memulai render.');
+      return;
+    }
 
     // Rendering can be attempted without browser cookies.
     // Cookies remain optional and are only sent when the user has configured them.
     setIsLaunchingRender(true);
 
-    const isClientMode = !isMobileDevice() && (
-      settings.renderEngine === 'client' ||
-      settings.hardwareAccel === 'browser_wasm' ||
-      settings.hardwareAccel === 'client_gpu' ||
-      (sourceMode === 'upload' && Boolean(uploadedVideoFile))
-    );
+    // Auto Clipper uses the server FFmpeg pipeline for remote sources.
+    // Keep browser rendering only for a file that exists solely in this browser session.
+    const isClientMode = sourceMode === 'upload' && Boolean(uploadedVideoFile);
 
     if (isClientMode) {
       try {
@@ -1017,8 +1018,8 @@ export default function App() {
             file_name_suffix: settings.fileNameSuffix || '',
             title_position: settings.titlePosition,
             title_duration: settings.titleDuration || 'entire',
-            subtitles_enabled: settings.subtitlesEnabled !== false && settings.captionStyle !== 'none',
-            caption_style: settings.subtitlesEnabled === false ? 'none' : settings.captionStyle,
+            subtitles_enabled: false,
+            caption_style: 'none',
             caption_font: settings.captionFont,
             title_font: settings.titleFont || settings.captionFont || 'Outfit',
             font_size: settings.fontSize,
@@ -1060,7 +1061,6 @@ export default function App() {
             render_mode: settings.renderMode || 'separate',
             compilation_title: settings.compilationTitle || null,
           },
-          transcript: result.transcript,
         }),
       });
 
