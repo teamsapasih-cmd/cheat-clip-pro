@@ -275,16 +275,8 @@ async def render_single_batch_clip(
                 logger.warning(f"Could not render color emoji title overlay: {ex}")
                 skip_ass_title = False
 
-        # Detect language from transcript or video context
+        # Let Whisper identify language from the clip audio. Analysis transcripts are metadata only.
         target_lang = None
-        if transcript:
-            try:
-                from backend.utils.text import detect_transcript_language
-                detected = detect_transcript_language(transcript[:50], display_title or "")
-                if detected and detected.get("code") in ("id", "en"):
-                    target_lang = detected["code"]
-            except Exception:
-                pass
 
         # Check if subtitles are actively enabled (must be enabled AND not set to style 'none')
         subtitles_active = bool(getattr(settings, "subtitles_enabled", True)) and (settings.caption_style != "none")
@@ -300,6 +292,8 @@ async def render_single_batch_clip(
                     end_t,
                     target_lang
                 )
+                if not words:
+                    raise RuntimeError("Subtitle Animasi Tingkat Kata gagal dibuat: transkripsi audio tidak menghasilkan kata. Periksa audio klip lalu coba render ulang.")
             ass_filename = f"{batch_id}_clip_{idx}.ass"
             ass_path = str(TEMP_DIR / ass_filename)
             await asyncio.to_thread(
@@ -631,15 +625,8 @@ async def render_merged_batch_clips(
                 raise RuntimeError("Failed to concatenate video segments")
 
         # 3. Transcribe & generate time-shifted subtitles
+        # Let Whisper identify language from each segment's audio. Do not read analysis transcript.
         target_lang = None
-        if transcript:
-            try:
-                from backend.utils.text import detect_transcript_language
-                detected = detect_transcript_language(transcript[:50])
-                if detected and detected.get("code") in ("id", "en"):
-                    target_lang = detected["code"]
-            except Exception:
-                pass
 
         total_duration_sec = 0.0
         merged_words = []
@@ -657,6 +644,8 @@ async def render_merged_batch_clips(
                     e_t,
                     target_lang
                 )
+                if not seg_words:
+                    raise RuntimeError(f"Subtitle Animasi Tingkat Kata gagal dibuat untuk klip {i + 1}: transkripsi audio tidak menghasilkan kata.")
                 for w in seg_words:
                     w_copy = dict(w)
                     w_start = float(w.get("start", 0.0))
@@ -884,7 +873,7 @@ async def process_batch_rendering(batch_id: str, request: RenderBatchRequest):
                     clips=clips,
                     settings=settings,
                     target_url=target_url,
-                    transcript=request.transcript,
+                    transcript=None,
                     cookies_content=cookies_content
                 )
                 batch["current_clip_index"] = 1
