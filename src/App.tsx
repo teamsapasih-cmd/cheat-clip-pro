@@ -53,8 +53,7 @@ import {
   FileVideo,
   Film,
   Scissors,
-  Sparkles,
-  Wrench
+  Sparkles
 } from 'lucide-react';
 import type { AnalyzeResponse, ViralClip, RenderSettings, BatchRenderProgress, SourcePrepProgress } from './types';
 
@@ -3372,17 +3371,9 @@ Transcript:
             title={!result ? 'Selesaikan analisis video terlebih dahulu' : 'Buka Auto Clipper Studio'}
           >
             <span className="workflow-step-num">03</span>
-            {false ? (
-              <Lock size={14} className="workflow-step-icon" style={{ color: '#d946ef' }} />
-            ) : (
-              <Scissors size={15} className="workflow-step-icon" />
-            )}
+            <Scissors size={15} className="workflow-step-icon" />
             <span className="workflow-step-title">AUTO CLIPPER</span>
-            {false ? (
-              <span className="workflow-tab-count" style={{ background: 'rgba(217, 70, 239, 0.2)', color: '#d946ef', border: '1px solid rgba(217, 70, 239, 0.5)' }}>
-                [OPTIMASI]
-              </span>
-            ) : markedClipsList.length > 0 ? (
+            {markedClipsList.length > 0 ? (
               <span className="workflow-tab-count">
                 [{markedClipsList.length} READY]
               </span>
@@ -6304,81 +6295,7 @@ Transcript:
         {/* Embedded Clip Studio Section or Maintenance Card */}
         {result && (
           <div style={{ display: workflowTab === 'clipper' ? 'block' : 'none' }}>
-            {false ? (
-              <div className="glass-panel" style={{
-                padding: '2.5rem 2rem',
-                textAlign: 'center',
-                background: 'linear-gradient(180deg, rgba(20, 15, 30, 0.95), rgba(10, 8, 16, 0.98))',
-                border: '1.5px solid rgba(217, 70, 239, 0.4)',
-                boxShadow: '0 0 30px rgba(217, 70, 239, 0.2)',
-                maxWidth: '680px',
-                margin: '2rem auto'
-              }}>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'rgba(217, 70, 239, 0.15)',
-                  border: '1px solid #d946ef',
-                  marginBottom: '1.25rem',
-                  boxShadow: '0 0 15px rgba(217, 70, 239, 0.4)'
-                }}>
-                  <Wrench size={32} color="#d946ef" />
-                </div>
-                <h3 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#fff', marginBottom: '0.8rem', letterSpacing: '0.04em' }}>
-                  🛠️ FITUR AUTO CLIPPER SEDANG DALAM PENINGKATAN
-                </h3>
-                <p style={{ color: '#cbd5e1', fontSize: '0.92rem', lineHeight: 1.6, maxWidth: '540px', margin: '0 auto 1.5rem' }}>
-                  Fitur rendering &amp; auto-cropping video pada server deployment sedang dioptimasi untuk menghasilkan proses render yang lebih cepat dan bebas antrean.
-                </p>
-                <div style={{
-                  padding: '1rem',
-                  background: 'rgba(217, 70, 239, 0.08)',
-                  border: '1px solid rgba(217, 70, 239, 0.3)',
-                  color: '#f8fafc',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  maxWidth: '540px',
-                  margin: '0 auto 1.8rem',
-                  textAlign: 'left'
-                }}>
-                  ✨ <strong>Rekomendasi:</strong> Anda tetap dapat menikmati seluruh hasil deteksi momen viral, memutar segmen video, dan mengekspor daftar timestamp di <strong>Tab 02 // RECOMMENDED CLIPS</strong>.
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="glowing-btn"
-                    onClick={() => setWorkflowTab('clips')}
-                    style={{
-                      padding: '0.65rem 1.6rem',
-                      background: 'var(--primary)',
-                      color: '#000',
-                      fontWeight: 800,
-                      fontSize: '0.88rem'
-                    }}
-                  >
-                    [ &lt;- KEMBALI KE TAB 02 // CLIPS ]
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasscodeDialog(true)}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid #332d4a',
-                      color: 'var(--text-muted)',
-                      padding: '0.6rem 1.1rem',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🔑 Mode Tester / Admin
-                  </button>
-                </div>
-              </div>
-            ) : (
+            
               <Suspense fallback={
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '360px', color: '#888' }}>
                   <span className="pulsing-text">Loading Studio Engine...</span>
@@ -6413,7 +6330,7 @@ Transcript:
                   onBackToClips={() => setWorkflowTab('clips')}
                 />
               </Suspense>
-            )}
+
           </div>
         )}
 
