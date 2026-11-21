@@ -295,7 +295,7 @@ async def render_single_batch_clip(
                 words = await asyncio.to_thread(
                     transcribe_clip_words,
                     raw_path,
-                    transcript,
+                    None,  # Supadata analysis transcript must never be used for rendered captions.
                     start_t,
                     end_t,
                     target_lang
@@ -652,7 +652,7 @@ async def render_merged_batch_clips(
                 seg_words = await asyncio.to_thread(
                     transcribe_clip_words,
                     part_paths[i],
-                    transcript,
+                    None,  # Generate word-level captions from clip audio only.
                     s_t,
                     e_t,
                     target_lang
