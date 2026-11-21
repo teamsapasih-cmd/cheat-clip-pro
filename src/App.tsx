@@ -395,6 +395,14 @@ export default function App() {
     return result.clips.filter(c => !!markedClips[`${c.start_time}_${c.end_time}`]);
   }, [result?.clips, markedClips]);
 
+  const isCurrentVideoYouTube = useCallback(() => {
+    if (sourceMode === 'upload' || sourceMode === 'gdrive' || sourceMode === 'twitch') return false;
+    if (result?.source_type === 'upload' || result?.source_type === 'gdrive' || result?.source_type === 'twitch') return false;
+    if (result?.video_id?.startsWith('upload_') || result?.video_id?.startsWith('gdrive_') || result?.video_id?.startsWith('twitch_')) return false;
+    if (result?.video_url?.includes('/api/video/') || result?.video_url?.includes('twitch.tv')) return false;
+    return true;
+  }, [sourceMode, result?.source_type, result?.video_id, result?.video_url]);
+
   const handleStartBatchRender = async (settings: RenderSettings) => {
     if (!result) return;
 
