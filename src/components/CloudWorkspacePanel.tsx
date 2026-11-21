@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cloud, FolderPlus, LogIn, LogOut, UploadCloud, X } from 'lucide-react';
 import {
   putSignedUpload,
@@ -35,20 +35,6 @@ export function CloudWorkspacePanel() {
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-
-  const refreshWorkspace = useCallback(async (token: string) => {
-    const [currentUser, ownedProjects] = await Promise.all([
-      workspaceApi.me(token),
-      workspaceApi.projects(token),
-    ]);
-    setUser(currentUser);
-    setProjects(ownedProjects);
-    setSelectedProject((current) =>
-      current && ownedProjects.some((project) => project.id === current)
-        ? current
-        : ownedProjects[0]?.id || '',
-    );
-  }, []);
 
   useEffect(() => {
     if (!session?.access_token) {
