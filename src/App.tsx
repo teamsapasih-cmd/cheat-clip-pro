@@ -6349,7 +6349,6 @@ Transcript:
                   onCancelRender={handleCancelRender}
                   isCancellingRender={isCancellingRender}
                   allowAppUpdates={allowAppUpdates}
-                  onOpenCookiesModal={() => setIsCookiesModalOpen(true)}
                   onBackToClips={() => setWorkflowTab('clips')}
                 />
               </Suspense>
