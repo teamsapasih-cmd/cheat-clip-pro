@@ -27,3 +27,4 @@ stable-ts
 # Computer Vision & Image / Emoji Overlay Rendering
 opencv-python>=4.8.0
 Pillow>=10.0.0
+\n# Durable cloud persistence foundation\nSQLAlchemy>=2.0.0\nalembic>=1.13.0\n
