@@ -65,6 +65,28 @@ class S3ObjectStorage:
             content_type=head.get("ContentType", content_type),
         )
 
+    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
+        if not key or key.startswith("/") or ".." in key.split("/"):
+            raise ValueError("Storage key must be a safe relative object key")
+        if not 1 <= expires_seconds <= 900:
+            raise ValueError("Signed upload URL expiry must be between 1 and 900 seconds")
+        return self.client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": content_type or "application/octet-stream",
+            },
+            ExpiresIn=expires_seconds,
+        )
+
+    def get_metadata(self, key: str) -> dict[str, object]:
+        head = self.client.head_object(Bucket=self.bucket, Key=key)
+        return {
+            "size_bytes": int(head["ContentLength"]),
+            "content_type": str(head.get("ContentType", "application/octet-stream")),
+        }
+
     def open(self, key: str) -> BinaryIO:
         response = self.client.get_object(Bucket=self.bucket, Key=key)
         return response["Body"]
