@@ -90,7 +90,7 @@ export const createAmbientFlowEffect = (options: AmbientFlowOptions = {}): Visua
       gl.uniform1f(timeLocation, frame.time);
       gl.uniform1f(motionLocation, motion);
       gl.uniform1f(intensityLocation, intensity);
-      gl.uniform1f(pointerResponseLocation, pointerResponse);
+      gl.uniform1f(pointerResponseLocation, frame.pointer.active ? pointerResponse : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
     dispose() {
