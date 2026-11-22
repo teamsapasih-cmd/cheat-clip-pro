@@ -7,4 +7,5 @@ export { createAmbientFlowEffect } from "./effects/AmbientFlow";
 export { createCanvasAuroraEffect } from "./effects/CanvasAurora";
 export { VisualControlPanel } from "./controls/VisualControlPanel";
 export { VisualWorkbench } from "./controls/VisualWorkbench";
+export { VisualGallery } from "./controls/VisualGallery";
 export { visualComponents, getVisualComponent, getDefaultValues, validateVisualValues } from "./registry";
