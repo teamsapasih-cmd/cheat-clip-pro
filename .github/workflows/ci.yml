@@ -38,7 +38,7 @@ jobs:
         run: npm ci
 
       - name: Validate local development launcher
-        run: node --check scripts/dev.js
+        run: node --check scripts/dev.js && node --check scripts/start-backend.js
 
       - name: Build frontend
         run: npm run build
