@@ -36,8 +36,8 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Lint cloud workspace additions
-        run: npx eslint src/services/workspaceApi.ts src/components/CloudWorkspacePanel.tsx
+      - name: Lint frontend modules
+        run: npx eslint src/services/workspaceApi.ts src/components/CloudWorkspacePanel.tsx src/visual-engine
 
   backend-tests:
     name: Backend syntax and cloud foundation tests
