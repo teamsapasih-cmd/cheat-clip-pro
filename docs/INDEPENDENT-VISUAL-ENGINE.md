@@ -18,7 +18,7 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 2. Parameter controls with validated defaults and safe ranges.
 3. Reusable presets and variants implemented as first-party configurations.
 4. Theme-aware palettes, responsive sizing, and pointer interaction.
-5. Reduced-motion support, visibility pausing, and graceful fallback for unsupported WebGL2 devices.
+5. Reduced-motion support, visibility pausing, and a visible unsupported-WebGL2 state. A Canvas2D fallback renderer remains planned.
 6. Lazy loading and per-effect resource cleanup.
 
 ## Non-goals
@@ -29,4 +29,4 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 ## Integration policy
 
-The engine remains isolated until a specific visual component is ready and tested. It must not alter the existing Clip Intelligence Studio workflow or render pipeline.
+The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The current workbench is an exported module and is not mounted into the production app yet. A production build and browser-level GPU test are still required before integration.
