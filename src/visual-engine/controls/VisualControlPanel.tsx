@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { getVisualComponent, getDefaultValues, validateVisualValues } from "../registry";
+import { useMemo, useRef, useState } from "react";
+import { exportVisualConfiguration, getVisualComponent, getDefaultValues, importVisualConfiguration, resetVisualConfiguration, validateVisualValues } from "../registry";
 import type { VisualValues } from "../registry";
 
 interface VisualControlPanelProps {
@@ -12,18 +12,69 @@ export function VisualControlPanel({ componentId, onValuesChange }: VisualContro
   const defaults = useMemo(() => definition ? getDefaultValues(definition) : {}, [definition]);
   const [values, setValues] = useState<VisualValues>(defaults);
   const [activePreset, setActivePreset] = useState("custom");
+  const [message, setMessage] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!definition) return <div className="visual-control-empty">Visual component not found.</div>;
 
   const updateValue = (key: string, value: string | number | boolean) => {
     const next = validateVisualValues(definition, { ...values, [key]: value });
-    setValues(next); setActivePreset("custom"); onValuesChange?.(next);
+    setValues(next);
+    setActivePreset("custom");
+    setMessage("");
+    onValuesChange?.(next);
   };
+
   const applyPreset = (presetId: string) => {
     const preset = definition.presets.find((item) => item.id === presetId);
     if (!preset) { setActivePreset("custom"); return; }
     const next = validateVisualValues(definition, preset.values);
-    setValues(next); setActivePreset(preset.id); onValuesChange?.(next);
+    setValues(next);
+    setActivePreset(preset.id);
+    setMessage("");
+    onValuesChange?.(next);
+  };
+
+  const exportConfiguration = () => {
+    try {
+      const serialized = exportVisualConfiguration({ schemaVersion: 1, componentId, values });
+      const blob = new Blob([serialized], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = componentId + "-config.json";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMessage("Configuration exported.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not export configuration.");
+    }
+  };
+
+  const importConfiguration = async (file?: File) => {
+    if (!file) return;
+    try {
+      const configuration = importVisualConfiguration(await file.text());
+      if (configuration.componentId !== componentId) {
+        throw new Error("This file belongs to a different visual component.");
+      }
+      setValues(configuration.values);
+      setActivePreset("custom");
+      onValuesChange?.(configuration.values);
+      setMessage("Configuration imported.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not import configuration.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const resetConfiguration = () => {
+    const next = resetVisualConfiguration(componentId).values;
+    setValues(next);
+    setActivePreset("custom");
+    setMessage("Controls reset to defaults.");
+    onValuesChange?.(next);
   };
 
   return (
@@ -70,6 +121,13 @@ export function VisualControlPanel({ componentId, onValuesChange }: VisualContro
           );
         })}
       </div>
+      <div className="visual-control-actions">
+        <button type="button" onClick={exportConfiguration}>Export JSON</button>
+        <button type="button" onClick={() => fileInputRef.current?.click()}>Import JSON</button>
+        <button type="button" onClick={resetConfiguration}>Reset</button>
+        <input ref={fileInputRef} type="file" accept="application/json,.json" hidden onChange={(event) => void importConfiguration(event.target.files?.[0])} />
+      </div>
+      <p className="visual-control-message" role="status" aria-live="polite">{message}</p>
     </section>
   );
 }
