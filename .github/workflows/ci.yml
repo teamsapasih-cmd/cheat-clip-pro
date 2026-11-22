@@ -75,6 +75,9 @@ jobs:
       - name: Test retention policy, cloud export, and signed upload size enforcement
         run: python -m pytest -q tests/test_retention_policy.py tests/test_legacy_render_cloud_export.py tests/test_database_session.py tests/test_s3_upload_size.py
 
+      - name: Validate opt-in staging storage integration test is safely skipped by default
+        run: python -m pytest -q tests/integration/test_s3_upload_contract.py
+
       - name: Test audio-only clip word transcription API
         run: python -m pytest -q tests/test_clip_word_transcription_api.py
 
