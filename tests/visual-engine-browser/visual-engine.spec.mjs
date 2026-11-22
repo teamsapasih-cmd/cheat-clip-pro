@@ -151,3 +151,36 @@ test("WebGL context loss and restoration reinitialize the visual effect", async 
   await expect.poll(() => page.evaluate(() => window.__visualDrawCalls), { timeout: 12000 }).toBeGreaterThan(previousDrawCount);
   await expect(page.locator(".visual-control-message").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
 });
+
+test("switching renderers disposes the previous animation loop", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__webglDrawCalls = 0;
+    window.__canvas2dDrawCalls = 0;
+    const originalWebGLDraw = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+      window.__webglDrawCalls += 1;
+      return originalWebGLDraw.apply(this, args);
+    };
+    const originalCanvasDraw = CanvasRenderingContext2D.prototype.fillRect;
+    CanvasRenderingContext2D.prototype.fillRect = function (...args) {
+      window.__canvas2dDrawCalls += 1;
+      return originalCanvasDraw.apply(this, args);
+    };
+  });
+
+  await page.goto("/tests/visual-engine-browser/");
+  await expect.poll(() => page.evaluate(() => window.__webglDrawCalls)).toBeGreaterThan(3);
+
+  await page.getByRole("button", { name: /Canvas Aurora/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__canvas2dDrawCalls)).toBeGreaterThan(3);
+  const webglAfterSwitch = await page.evaluate(() => window.__webglDrawCalls);
+  await page.waitForTimeout(180);
+  expect(await page.evaluate(() => window.__webglDrawCalls)).toBe(webglAfterSwitch);
+
+  await page.getByRole("button", { name: /Particle Field/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__webglDrawCalls)).toBeGreaterThan(webglAfterSwitch);
+  const canvasAfterSwitch = await page.evaluate(() => window.__canvas2dDrawCalls);
+  await page.waitForTimeout(180);
+  expect(await page.evaluate(() => window.__canvas2dDrawCalls)).toBe(canvasAfterSwitch);
+});
+
