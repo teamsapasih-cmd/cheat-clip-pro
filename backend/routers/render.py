@@ -8,15 +8,26 @@ import uuid
 import zipfile
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, StreamingResponse
 
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.config import (
     ACTIVE_ENCODER_NAME,
     EXPORTS_DIR,
     detect_hardware_support,
     logger,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.auth.tokens import decode_access_token
+from backend.cloud.factory import build_object_storage
+from backend.database.dependencies import get_db_session
+from backend.database.models import Project, User
+from backend.routers.auth import get_current_user
+from backend.services.legacy_render_export import assert_batch_owner, persist_legacy_batch_exports
 from backend.schemas.render import (
     RenderBatchRequest,
     RenderSettingsModel,
@@ -34,10 +45,28 @@ from backend.services.render_service import (
 )
 
 router = APIRouter(tags=["Render"])
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
+def _optional_owner_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> str | None:
+    if credentials is None:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    return str(payload["sub"])
 
 
 @router.post("/api/render-batch")
-async def start_batch_render(request: RenderBatchRequest, background_tasks: BackgroundTasks):
+async def start_batch_render(
+    request: RenderBatchRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    owner_id: str | None = Depends(_optional_owner_id),
+):
+    enforce_ip_rate_limit(http_request, action="legacy.render", limit=6, window_seconds=900)
     if not request.clips:
         raise HTTPException(status_code=400, detail="No clips provided for rendering")
 
@@ -67,6 +96,7 @@ async def start_batch_render(request: RenderBatchRequest, background_tasks: Back
         })
         RENDER_BATCHES[batch_id] = {
             "batch_id": batch_id,
+            "owner_id": owner_id,
             "total_clips": 1,
             "current_clip_index": 0,
             "overall_status": "running",
@@ -88,6 +118,7 @@ async def start_batch_render(request: RenderBatchRequest, background_tasks: Back
             })
         RENDER_BATCHES[batch_id] = {
             "batch_id": batch_id,
+            "owner_id": owner_id,
             "total_clips": len(request.clips),
             "current_clip_index": 0,
             "overall_status": "running",
@@ -129,8 +160,10 @@ async def cancel_batch_rendering_endpoint(batch_id: str):
 async def retry_batch_rendering(
     batch_id: str,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     body: Optional[RetryBatchRequest] = None
 ):
+    enforce_ip_rate_limit(http_request, action="legacy.render_retry", limit=4, window_seconds=900)
     if batch_id not in RENDER_BATCHES:
         raise HTTPException(status_code=404, detail="Batch not found")
     batch = RENDER_BATCHES[batch_id]
@@ -308,3 +341,48 @@ def get_hardware_acceleration_status():
             },
         ],
     }
+
+
+@router.post("/api/render-batch/{batch_id}/save-to-cloud")
+def save_render_batch_to_cloud(
+    batch_id: str,
+    project_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db_session),
+):
+    """Save completed legacy render files into the user's private cloud storage."""
+    batch = RENDER_BATCHES.get(batch_id)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Render batch not found")
+    try:
+        assert_batch_owner(batch, user.id)
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="Render batch not found")
+    project = db.scalar(
+        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        storage = build_object_storage()
+        result = persist_legacy_batch_exports(
+            db,
+            storage,
+            owner_id=user.id,
+            project=project,
+            batch_id=batch_id,
+            batch=batch,
+            exports_dir=EXPORTS_DIR,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Project access denied")
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Cloud object storage is not configured")
+    except Exception:
+        logger.exception("Could not save render batch %s to cloud storage", batch_id)
+        raise HTTPException(status_code=502, detail="Could not persist render outputs to cloud storage")
+    return {"status": "saved", "batch_id": batch_id, **result}

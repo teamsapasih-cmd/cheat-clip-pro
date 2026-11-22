@@ -14,8 +14,9 @@ class RenderSettingsModel(BaseModel):
     file_name_suffix: Optional[str] = ""
     title_position: str = "auto"
     title_duration: Optional[str] = "entire"
-    subtitles_enabled: Optional[bool] = True
-    caption_style: str = "viral_pop"
+    # Legacy analysis transcript is accepted for request compatibility only; render captions are always audio-transcribed.
+    subtitles_enabled: Optional[bool] = False
+    caption_style: str = "none"
     caption_font: str = "Outfit"
     title_font: Optional[str] = "Outfit"
     font_size: str = "medium"

@@ -3,15 +3,18 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.utils.text import canonical_video_url
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.config import (
     EXPORTS_DIR,
     TEMP_DIR,
@@ -21,10 +24,18 @@ from backend.config import (
     extract_clip_frame,
     get_video_file_metadata,
     is_valid_mp4,
+    transcribe_clip_words,
     logger,
 )
 
 router = APIRouter(tags=["Media"])
+
+
+class ClipWordTranscriptionRequest(BaseModel):
+    file_name: str
+    start_time: float
+    end_time: float
+    target_language: Optional[str] = None
 
 
 MAX_VIDEO_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024   # 4 GB
@@ -80,6 +91,7 @@ async def _save_uploaded_file_chunked(file: UploadFile, save_path: Path, max_byt
 
 @router.post("/api/upload-video")
 async def upload_video(
+    request: Request,
     file: UploadFile = File(...),
     client_duration: Optional[float] = Form(None),
     client_width: Optional[int] = Form(None),
@@ -90,6 +102,7 @@ async def upload_video(
     Handles local video or browser-extracted audio uploads (.mp4, .mov, .mkv, .webm, .avi, .wav, .mp3, etc.).
     Extracts metadata and saves to uploads folder.
     """
+    enforce_ip_rate_limit(request, action="legacy.upload_video", limit=8, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
@@ -135,6 +148,69 @@ async def upload_video(
     except Exception as e:
         logger.error(f"Failed to upload video: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process video upload: {str(e)}")
+
+
+
+def _transcribe_uploaded_audio_segment(source_path: Path, start_time: float, end_time: float, target_language: Optional[str]):
+    """Extract a short temporary WAV segment and generate captions from its audio only."""
+    duration = end_time - start_time
+    fd, temp_name = tempfile.mkstemp(prefix="clip_words_", suffix=".wav", dir=str(TEMP_DIR))
+    os.close(fd)
+    temp_path = Path(temp_name)
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-i", str(source_path), "-ss", str(start_time), "-t", str(duration),
+            "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(temp_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if result.returncode != 0 or not temp_path.exists() or temp_path.stat().st_size < 1024:
+            raise RuntimeError("Audio segment could not be extracted for subtitle transcription.")
+        return transcribe_clip_words(
+            str(temp_path),
+            None,
+            0.0,
+            duration,
+            target_language,
+        )
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except Exception:
+            logger.warning("Could not remove temporary word-transcription audio segment.")
+
+
+@router.post("/api/transcribe-clip-words")
+async def transcribe_uploaded_clip_words(body: ClipWordTranscriptionRequest, request: Request):
+    enforce_ip_rate_limit(request, action="legacy.transcribe", limit=20, window_seconds=900)
+    """Return word timestamps from an uploaded source's audio, never from Supadata."""
+    if body.start_time < 0 or body.end_time <= body.start_time:
+        raise HTTPException(status_code=400, detail="Invalid clip time range.")
+    duration = body.end_time - body.start_time
+    if duration > 180:
+        raise HTTPException(status_code=400, detail="Clip subtitle transcription is limited to 180 seconds.")
+    clean_name = os.path.basename(body.file_name.split("?")[0].strip())
+    if not clean_name.startswith("upload_") or clean_name in ("upload_", ".", ".."):
+        raise HTTPException(status_code=400, detail="Invalid uploaded audio reference.")
+    source_path = (UPLOADS_DIR / clean_name).resolve()
+    if source_path.parent != UPLOADS_DIR.resolve() or not source_path.is_file() or not _is_safe_path(source_path):
+        raise HTTPException(status_code=404, detail="Uploaded audio source was not found.")
+    try:
+        words = await asyncio.to_thread(
+            _transcribe_uploaded_audio_segment,
+            source_path,
+            float(body.start_time),
+            float(body.end_time),
+            body.target_language,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Audio transcription timed out. Please retry.")
+    except Exception as exc:
+        logger.exception("Word-level audio transcription failed for uploaded clip.")
+        raise HTTPException(status_code=503, detail="Could not generate animated subtitles from this clip's audio.") from exc
+    if not words:
+        raise HTTPException(status_code=503, detail="No speech words could be detected in this clip's audio.")
+    return {"words": words, "duration": duration, "source": "audio_transcription"}
 
 
 def _find_video_file_on_disk(file_name: str) -> Optional[Path]:
@@ -378,7 +454,8 @@ def get_video_file(file_name: str, request: Request):
 
 
 @router.post("/api/upload-bgm")
-async def upload_bgm(file: UploadFile = File(...)):
+async def upload_bgm(request: Request, file: UploadFile = File(...)):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -418,7 +495,8 @@ def get_audio_file(file_name: str):
 
 
 @router.post("/api/upload-sfx")
-async def upload_hook_sfx(file: UploadFile = File(...)):
+async def upload_hook_sfx(request: Request, file: UploadFile = File(...)):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -448,7 +526,8 @@ async def upload_hook_sfx(file: UploadFile = File(...)):
 
 
 @router.post("/api/upload-watermark")
-async def upload_watermark(file: UploadFile = File(...)):
+async def upload_watermark(request: Request, file: UploadFile = File(...)):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -574,7 +653,8 @@ async def detect_face(
 
 
 @router.post("/api/upload-font")
-async def upload_font(file: UploadFile = File(...)):
+async def upload_font(request: Request, file: UploadFile = File(...)):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     """
     Handles custom font file uploads (.ttf, .otf, .woff, .woff2).
     Saves to fonts directory so preview and libass / ffmpeg can immediately render with it.

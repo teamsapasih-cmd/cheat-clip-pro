@@ -5,9 +5,10 @@ import time
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from backend.config import EXPORTS_DIR, logger
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.schemas.downloads import PrepareSourceRequest, RawClipDownloadRequest, RawVideoDownloadRequest
 from backend.services.download_service import (
     cancel_master_source_job,
@@ -53,7 +54,8 @@ async def get_source_status(
 
 
 @router.post("/api/prepare-source")
-async def handle_prepare_source(req: PrepareSourceRequest, background_tasks: BackgroundTasks):
+async def handle_prepare_source(req: PrepareSourceRequest, background_tasks: BackgroundTasks, request: Request):
+    enforce_ip_rate_limit(request, action="legacy.prepare_source", limit=8, window_seconds=900)
     """
     Initiates Phase 1: Downloading/acquiring the full master source video (1080p).
     If already cached, completes immediately.
@@ -137,7 +139,8 @@ async def handle_cancel_prepare_source(job_id: str):
 
 
 @router.post("/api/download-raw-video")
-async def handle_download_raw_video(req: RawVideoDownloadRequest, background_tasks: BackgroundTasks):
+async def handle_download_raw_video(req: RawVideoDownloadRequest, background_tasks: BackgroundTasks, request: Request):
+    enforce_ip_rate_limit(request, action="legacy.download_raw_video", limit=3, window_seconds=900)
     v_url = req.video_url.strip() if req.video_url else ""
     if req.video_id and (req.video_id.startswith("gdrive_") or req.video_id.startswith("upload_")):
         if not v_url.startswith("/api/video/"):
@@ -182,7 +185,8 @@ async def get_raw_download_status(job_id: str):
 
 
 @router.post("/api/download-raw-clip")
-async def handle_download_raw_clip(req: RawClipDownloadRequest, background_tasks: BackgroundTasks):
+async def handle_download_raw_clip(req: RawClipDownloadRequest, background_tasks: BackgroundTasks, request: Request):
+    enforce_ip_rate_limit(request, action="legacy.download_raw_clip", limit=12, window_seconds=900)
     v_url = req.video_url.strip() if req.video_url else ""
     if req.video_id and (req.video_id.startswith("gdrive_") or req.video_id.startswith("upload_")):
         if not v_url.startswith("/api/video/"):

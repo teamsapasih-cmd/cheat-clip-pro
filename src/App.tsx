@@ -1,16 +1,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { HeatmapTimeline } from './components/HeatmapTimeline';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
-import { resilientFetch } from './utils/api';
 import { getStoredCookies, hasStoredCookies } from './utils/cookieUtils';
 import { extractAudioFromVideoClient } from './utils/audioExtractor';
 import { renderClipClientSide, triggerBrowserDownload } from './services/clientRenderer';
 import { renderClipWebCodecs, isWebCodecsGpuSupported } from './services/webcodecsRenderer';
 import { buildCaptionChunksForClip } from './services/captionUtils';
-import { isMobileDevice, requestWakeLock, releaseWakeLock } from './utils/deviceUtils';
+import { requestWakeLock, releaseWakeLock } from './utils/deviceUtils';
 import { LayoutMetricsSync } from './utils/layoutMetricsSync';
 import { useLanguage } from './locales';
-import { HackerApiKeyInput } from './components/HackerApiKeyInput';
+import { CloudWorkspacePanel } from './components/CloudWorkspacePanel';
 
 // Lazy-loaded modal and heavy studio components to minimize initial bundle size and speed up page load
 const ClipStudioSection = lazy(() =>
@@ -46,7 +45,6 @@ import {
   ExternalLink,
   X,
   Trash2,
-  Heart,
   RefreshCw,
   Layers,
   ArrowLeft,
@@ -55,10 +53,7 @@ import {
   FileVideo,
   Film,
   Scissors,
-  Sparkles,
-  Lock,
-  Unlock,
-  Wrench
+  Sparkles
 } from 'lucide-react';
 import type { AnalyzeResponse, ViralClip, RenderSettings, BatchRenderProgress, SourcePrepProgress } from './types';
 
@@ -95,20 +90,8 @@ export default function App() {
     if (saved === '15s' || saved === '30s' || saved === '60s' || saved === 'auto') return saved;
     return '30s';
   });
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('cheat_clip_gemini_api_key') || '');
-  const [apiProvider, setApiProvider] = useState<'gemini' | 'openrouter'>(() => {
-    const saved = localStorage.getItem('cheat_clip_api_provider');
-    return (saved === 'openrouter' || saved === 'gemini') ? saved : 'gemini';
-  });
-  const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('cheat_clip_openrouter_key') || '');
-  const [openRouterModel, setOpenRouterModel] = useState<string>(() => {
-    const saved = localStorage.getItem('cheat_clip_openrouter_model');
-    return saved || 'google/gemini-2.5-flash';
-  });
-  const [openRouterModels, setOpenRouterModels] = useState<Array<{ id: string; name: string; description?: string; context_length?: number; recommended?: boolean }>>([]);
-  const [loadingOpenRouterModels, setLoadingOpenRouterModels] = useState(false);
-  const [customOpenRouterModel, setCustomOpenRouterModel] = useState<string>('');
-  const [isCustomOpenRouterModel, setIsCustomOpenRouterModel] = useState<boolean>(false);
+  // AI provider and credentials are managed exclusively by the server.
+  const apiProvider = 'gemini' as const;
   const [isCookiesModalOpen, setIsCookiesModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [allowAppUpdates, setAllowAppUpdates] = useState<boolean>(() => {
@@ -147,18 +130,8 @@ export default function App() {
   }>>({});
   const [trimmerClip, setTrimmerClip] = useState<ViralClip | null>(null);
 
-  // AI model selection and custom focus prompt states
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    const saved = localStorage.getItem('cheat_clip_selected_model');
-    // Auto-migrate outdated 1.0 models to gemini-2.5-flash
-    if (saved && (saved.includes('1.0') || saved.includes('vision'))) {
-      localStorage.setItem('cheat_clip_selected_model', 'gemini-2.5-flash');
-      return 'gemini-2.5-flash';
-    }
-    return saved || 'gemini-2.5-flash';
-  });
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [loadingModels, setLoadingModels] = useState(false);
+  // AI model is selected centrally; users do not configure provider credentials.
+  const selectedModel = 'gemini-2.5-flash';
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [targetClipCount, setTargetClipCount] = useState<number>(() => {
     const val = localStorage.getItem('cheat_clip_target_clip_count');
@@ -187,76 +160,9 @@ export default function App() {
   const [showLanguageConfirmModal, setShowLanguageConfirmModal] = useState<boolean>(false);
   const [skipLanguageConfirm, setSkipLanguageConfirm] = useState<boolean>(false);
 
-  // Deployment Gating & Admin Tester Mode for Tab 03 (Auto Clipper)
-  const isLocalhost = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname === '::1' ||
-    window.location.hostname.endsWith('.local')
-  );
-
-  const DEV_PASSCODE = ((import.meta.env as any)?.VITE_DEV_PASSCODE || 'cheatclipdev').trim();
-
-  const [isDevUnlocked, setIsDevUnlocked] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    if (isLocalhost) return true;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('dev') === '1' || params.get('admin') === '1' || params.get('clipper') === 'open') {
-      try { localStorage.setItem('cheat_clip_dev_access', 'true'); } catch {}
-      return true;
-    }
-    try {
-      return localStorage.getItem('cheat_clip_dev_access') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  const [showClipperMaintenanceModal, setShowClipperMaintenanceModal] = useState<boolean>(false);
-  const [showPasscodeDialog, setShowPasscodeDialog] = useState<boolean>(false);
-  const [passcodeInput, setPasscodeInput] = useState<string>('');
-  const [passcodeError, setPasscodeError] = useState<string>('');
-
-  const handleUnlockWithPasscode = (code: string) => {
-    const clean = code.trim();
-    if (clean === DEV_PASSCODE || clean === 'cheatclip' || clean === 'admin123') {
-      setIsDevUnlocked(true);
-      try { localStorage.setItem('cheat_clip_dev_access', 'true'); } catch {}
-      setShowPasscodeDialog(false);
-      setShowClipperMaintenanceModal(false);
-      setPasscodeInput('');
-      setPasscodeError('');
-      if (result) {
-        setWorkflowTab('clipper');
-      }
-    } else {
-      setPasscodeError('Passcode tidak valid. Silakan coba lagi.');
-    }
-  };
-
-  const handleResetAdminStatus = () => {
-    setIsDevUnlocked(false);
-    try { localStorage.removeItem('cheat_clip_dev_access'); } catch {}
-    if (typeof window !== 'undefined' && window.history && window.history.replaceState) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('dev');
-      url.searchParams.delete('admin');
-      url.searchParams.delete('clipper');
-      window.history.replaceState({}, '', url.toString());
-    }
-    if (workflowTab === 'clipper') {
-      setWorkflowTab('clips');
-    }
-  };
-
+  // Auto Clipper is a standard product feature, available after video analysis.
   const handleNavigateToClipper = () => {
-    if (!isLocalhost && !isDevUnlocked) {
-      setShowClipperMaintenanceModal(true);
-      return;
-    }
-    if (result) {
-      setWorkflowTab('clipper');
-    }
+    if (result) setWorkflowTab('clipper');
   };
 
   const parseTimeToSeconds = (val: string): number | null => {
@@ -497,32 +403,20 @@ export default function App() {
     return true;
   }, [sourceMode, result?.source_type, result?.video_id, result?.video_url]);
 
-  const handleStartBatchRender = async (settings: RenderSettings, forceProceed = false) => {
+  const handleStartBatchRender = async (settings: RenderSettings) => {
     if (!result) return;
-
-    if (!forceProceed && isCurrentVideoYouTube() && !hasStoredCookies()) {
-      const skipped = sessionStorage.getItem('cheatclip_skip_cookie_warning') === 'true';
-      if (!skipped) {
-        setCookieWarningState({
-          isOpen: true,
-          actionType: 'render',
-          onProceed: () => {
-            setCookieWarningState(prev => ({ ...prev, isOpen: false }));
-            handleStartBatchRender(settings, true);
-          }
-        });
-        return;
-      }
+    if (!Array.isArray(settings.selectedClips) || settings.selectedClips.length === 0) {
+      alert('Pilih minimal satu klip di Bagian 02 sebelum memulai render.');
+      return;
     }
 
+    // Rendering can be attempted without browser cookies.
+    // Cookies remain optional and are only sent when the user has configured them.
     setIsLaunchingRender(true);
 
-    const isClientMode = !isMobileDevice() && (
-      settings.renderEngine === 'client' ||
-      settings.hardwareAccel === 'browser_wasm' ||
-      settings.hardwareAccel === 'client_gpu' ||
-      (sourceMode === 'upload' && Boolean(uploadedVideoFile))
-    );
+    // Auto Clipper uses the server FFmpeg pipeline for remote sources.
+    // Keep browser rendering only for a file that exists solely in this browser session.
+    const isClientMode = sourceMode === 'upload' && Boolean(uploadedVideoFile);
 
     if (isClientMode) {
       try {
@@ -888,19 +782,51 @@ export default function App() {
             };
           });
 
-          // Step 3: Render in client browser via GPU Hardware Encoder (WebCodecs) or WASM
+          // Step 3: Generate captions from the uploaded audio file, never from the Supadata analysis transcript.
           let blob: Blob;
-          const useWebCodecsGpu = (settings.hardwareAccel === 'client_gpu' || (!settings.hardwareAccel && isWebCodecsGpuSupported())) && isWebCodecsGpuSupported();
+          const captionsEnabled = settings.subtitlesEnabled !== false && settings.captionStyle !== 'none';
+          let clipChunks: ReturnType<typeof buildCaptionChunksForClip> = [];
+
+          if (captionsEnabled) {
+            const audioFileName = uploadedVideoInfo?.savedName;
+            if (!audioFileName) {
+              throw new Error('File audio sementara untuk membuat subtitle tidak ditemukan. Ulangi proses upload video.');
+            }
+            const transcriptionResponse = await fetch('/api/transcribe-clip-words', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                file_name: audioFileName,
+                start_time: Number(clip.start_time),
+                end_time: Number(clip.end_time),
+              }),
+            });
+            const transcriptionData = await transcriptionResponse.json().catch(() => ({}));
+            if (!transcriptionResponse.ok) {
+              throw new Error(transcriptionData.detail || 'Gagal membuat subtitle animasi dari audio klip.');
+            }
+            const wordLines = (Array.isArray(transcriptionData.words) ? transcriptionData.words : [])
+              .map((word: { word?: string; start?: number; end?: number }) => ({
+                text: String(word.word || ''),
+                start: Number(word.start) || 0,
+                end: Number(word.end) || 0,
+              }))
+              .filter((word: { text: string; start: number; end: number }) => word.text && word.end > word.start);
+            clipChunks = buildCaptionChunksForClip(wordLines, 0, Math.max(0.1, Number(clip.end_time) - Number(clip.start_time)));
+            if (clipChunks.length === 0) {
+              throw new Error('Tidak ada kata yang berhasil dikenali dari audio klip. Subtitle animasi tidak dapat dibuat.');
+            }
+          }
+
+          const webCodecsAvailable = isWebCodecsGpuSupported();
+          const useWebCodecsGpu = webCodecsAvailable && (captionsEnabled || settings.hardwareAccel === 'client_gpu' || !settings.hardwareAccel);
+          if (captionsEnabled && !webCodecsAvailable) {
+            throw new Error('Browser ini belum mendukung WebCodecs yang diperlukan untuk Subtitle Animasi Tingkat Kata. Gunakan Chrome atau Edge versi terbaru.');
+          }
 
           if (useWebCodecsGpu) {
             try {
               const isPreTrimmed = !(sourceMode === 'upload' && uploadedVideoFile);
-              const clipChunks = buildCaptionChunksForClip(
-                result.transcript,
-                clip.start_time,
-                clip.end_time,
-                clip.transcript
-              );
 
               blob = await renderClipWebCodecs({
                 videoSourceUrl: rawSourceUrl,
@@ -961,8 +887,12 @@ export default function App() {
                 }
               });
             } catch (gpuErr) {
+              if (captionsEnabled) {
+                console.error('[Client GPU] WebCodecs render failed while animated captions are enabled:', gpuErr);
+                throw new Error(gpuErr instanceof Error ? gpuErr.message : 'Render Subtitle Animasi Tingkat Kata gagal. Silakan coba kembali.');
+              }
               console.warn('[Client GPU] WebCodecs hardware render failed, fallback to WASM engine:', gpuErr);
-              // Graceful fallback to WASM engine
+              // Graceful fallback to WASM engine when animated captions are not requested.
               blob = await renderClipClientSide({
                 videoSourceUrl: rawSourceUrl,
                 startTime: (sourceMode === 'upload' && uploadedVideoFile) ? clip.start_time : undefined,
@@ -1124,6 +1054,7 @@ export default function App() {
             file_name_suffix: settings.fileNameSuffix || '',
             title_position: settings.titlePosition,
             title_duration: settings.titleDuration || 'entire',
+            // Use the Auto Clipper word-animation setting; Supadata transcript is not sent to rendering.
             subtitles_enabled: settings.subtitlesEnabled !== false && settings.captionStyle !== 'none',
             caption_style: settings.subtitlesEnabled === false ? 'none' : settings.captionStyle,
             caption_font: settings.captionFont,
@@ -1167,7 +1098,6 @@ export default function App() {
             render_mode: settings.renderMode || 'separate',
             compilation_title: settings.compilationTitle || null,
           },
-          transcript: result.transcript,
         }),
       });
 
@@ -1460,84 +1390,6 @@ export default function App() {
       }
     };
   }, [result]);
-
-  // Fetch available AI models when API key is detected/entered
-  useEffect(() => {
-    const fetchModels = async () => {
-      const cleanKey = apiKey.trim();
-      if (!cleanKey || cleanKey.length < 20 || cleanKey.toLowerCase() === 'mock') {
-        setAvailableModels([]);
-        return;
-      }
-      setLoadingModels(true);
-      try {
-        const res = await resilientFetch('/api/models', {
-          headers: {
-            'X-Gemini-API-Key': cleanKey,
-          },
-          maxRetries: 3,
-          retryDelay: 800,
-          silent: true
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.models && data.models.length > 0) {
-            setAvailableModels(data.models);
-            if (!data.models.includes(selectedModel) || selectedModel.includes('1.5') || selectedModel.includes('1.0')) {
-              const fallback = data.models.find((m: string) => m.includes('flash')) || data.models[0] || 'gemini-2.5-flash';
-              setSelectedModel(fallback);
-              localStorage.setItem('cheat_clip_selected_model', fallback);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Failed to retrieve available models:', err);
-      } finally {
-        setLoadingModels(false);
-      }
-    };
-
-    const delayDebounce = setTimeout(() => {
-      fetchModels();
-    }, 600);
-
-    return () => clearTimeout(delayDebounce);
-  }, [apiKey]);
-
-  // OpenRouter models retrieval
-  useEffect(() => {
-    let isCancelled = false;
-    const fetchOpenRouterModels = async () => {
-      setLoadingOpenRouterModels(true);
-      try {
-        const cleanKey = openRouterKey.trim();
-        const res = await resilientFetch('/api/openrouter-models', {
-          headers: cleanKey ? {
-            'X-OpenRouter-API-Key': cleanKey,
-            'Authorization': `Bearer ${cleanKey}`
-          } : undefined,
-          maxRetries: 2,
-          retryDelay: 800,
-          silent: true
-        });
-        if (res.ok && !isCancelled) {
-          const data = await res.json();
-          if (data.models && Array.isArray(data.models) && data.models.length > 0) {
-            setOpenRouterModels(data.models);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to retrieve OpenRouter models:', err);
-      } finally {
-        if (!isCancelled) setLoadingOpenRouterModels(false);
-      }
-    };
-
-    fetchOpenRouterModels();
-    return () => {
-      isCancelled = true;
-    };
-  }, [openRouterKey]);
 
   // Sync marked clips with local storage based on active video ID
   useEffect(() => {
@@ -2223,19 +2075,6 @@ export default function App() {
       if (!url.trim()) return;
     }
 
-    // Require an API key before making any request
-    if (apiProvider === 'gemini') {
-      if (!apiKey.trim()) {
-        setError(t.errors.apiKeyRequired);
-        return;
-      }
-    } else {
-      if (!openRouterKey.trim()) {
-        setError('OpenRouter API Key is required. Please paste your key in AI Engine Settings.');
-        return;
-      }
-    }
-
     let rangeStartSecs: number | undefined = undefined;
     let rangeEndSecs: number | undefined = undefined;
 
@@ -2439,8 +2278,7 @@ export default function App() {
     const isGDrive = isGoogleDriveUrl(targetAnalyzeUrl);
     setAiStage(isGDrive ? 'Connecting to Google Drive' : 'Initializing Analysis Pipeline');
     setAiDetail(sourceMode === 'upload' ? 'Inspecting local video container & audio track...' : isGDrive ? 'Connecting to Google Drive and resolving video...' : 'Connecting to YouTube and resolving media stream metadata...');
-    const effectiveModel = apiProvider === 'openrouter' ? openRouterModel : selectedModel;
-    setActiveProcessingModel(effectiveModel);
+    setActiveProcessingModel(selectedModel);
     setLoadingDetails(sourceMode === 'upload' ? 'Inspecting local video file...' : isGDrive ? 'Connecting to Google Drive...' : 'Connecting to YouTube...');
 
     // Create AbortController for cancellation support
@@ -2458,11 +2296,9 @@ export default function App() {
         body: JSON.stringify({
           url: targetAnalyzeUrl,
           duration: durationPref,
-          api_key: apiProvider === 'gemini' ? (apiKey.trim() || undefined) : undefined,
-          model: apiProvider === 'gemini' ? selectedModel : undefined,
+          model: selectedModel,
           api_provider: apiProvider,
-          openrouter_key: apiProvider === 'openrouter' ? (openRouterKey.trim() || undefined) : undefined,
-          openrouter_model: apiProvider === 'openrouter' ? openRouterModel : undefined,
+          openrouter_model: undefined,
           custom_prompt: customPrompt.trim() || undefined,
           range_start: rangeStartSecs,
           range_end: rangeEndSecs,
@@ -3381,6 +3217,7 @@ Transcript:
 
   return (
     <>
+      <CloudWorkspacePanel />
       {/* Toast Notification */}
       {toastMessage && (
         <div className="toast-msg" role="status" aria-live="polite">
@@ -3400,18 +3237,16 @@ Transcript:
         </div>
       )}
 
-      {/* Full-Width Cyber Header Bar (johansa.com style - Edge-to-Edge Solid Dark) */}
+      {/* Clip Intelligence Studio — first-party product header */}
       <div className="app-header-wrapper">
         <div className="app-header-inner">
           <header className="app-header">
             <div className="header-logo">
               <div>
                 <div className="logo-title-row">
-                  <span className="prompt-marker">
-                    &gt;_
-                  </span>
+                  <span className="prompt-marker" aria-hidden="true"><Film size={21} strokeWidth={2.2} /></span>
                   <h1 className="logo-title">
-                    CHEAT CLIP PRO
+                    CLIP INTELLIGENCE STUDIO
                   </h1>
                   <span className="status-dot" title="Online"></span>
                 </div>
@@ -3470,68 +3305,12 @@ Transcript:
                 </button>
               )}
               <LanguageSwitcher />
-              <a
-                href="https://tako.id/johansa"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="header-nav-btn support-btn"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              >
-                <Heart size={13} /> {t.header.supportProject}
-              </a>
-            </div>
+</div>
           </header>
         </div>
       </div>
 
       <div className="app-container">
-        {/* Tester / Dev Mode Active Banner in Deployment */}
-        {!isLocalhost && isDevUnlocked && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            padding: '0.45rem 0.85rem',
-            background: 'rgba(16, 185, 129, 0.12)',
-            border: '1.5px solid #10b981',
-            borderRadius: 0,
-            color: '#34d399',
-            fontSize: '0.74rem',
-            fontWeight: 700,
-            marginBottom: '0.9rem',
-            boxShadow: '0 0 12px rgba(16, 185, 129, 0.25)',
-            gap: '0.6rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <Unlock size={14} color="#10b981" />
-              <span>[MODE TESTER / DEVELOPER AKTIF] — Tab 03 Auto Clipper Terbuka di Deployment</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleResetAdminStatus}
-              style={{
-                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-                border: '1px solid #b91c1c',
-                color: '#fff',
-                padding: '0.3rem 0.75rem',
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                borderRadius: 2,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                boxShadow: '0 0 8px rgba(239, 68, 68, 0.35)'
-              }}
-              title="Kembali ke mode user biasa untuk menguji tampilan pemeliharaan"
-            >
-              <Lock size={12} color="#fff" />
-              <span>Reset Status Admin (Tes Mode User Biasa)</span>
-            </button>
-          </div>
-        )}
-
         {/* Workflow Navigation Tabs Pipeline (01 SOURCE -> 02 RECOMMENDED CLIPS -> 03 AUTO CLIPPER) */}
         <nav className="workflow-tab-bar" aria-label="Workflow Navigation">
           <button
@@ -3612,21 +3391,13 @@ Transcript:
             id="tab-step-clipper"
             className={`workflow-tab-btn ${workflowTab === 'clipper' ? 'active' : ''} ${markedClipsList.length > 0 ? 'step-has-content' : ''}`}
             onClick={handleNavigateToClipper}
-            disabled={!result && (isLocalhost || isDevUnlocked)}
-            title={(!isLocalhost && !isDevUnlocked) ? 'Fitur dalam tahap optimasi performa cloud (Klik untuk info)' : (!result ? 'Selesaikan analisis video terlebih dahulu' : 'Buka Auto Clipper Studio')}
+            disabled={!result}
+            title={!result ? 'Selesaikan analisis video terlebih dahulu' : 'Buka Auto Clipper Studio'}
           >
             <span className="workflow-step-num">03</span>
-            {(!isLocalhost && !isDevUnlocked) ? (
-              <Lock size={14} className="workflow-step-icon" style={{ color: '#d946ef' }} />
-            ) : (
-              <Scissors size={15} className="workflow-step-icon" />
-            )}
+            <Scissors size={15} className="workflow-step-icon" />
             <span className="workflow-step-title">AUTO CLIPPER</span>
-            {(!isLocalhost && !isDevUnlocked) ? (
-              <span className="workflow-tab-count" style={{ background: 'rgba(217, 70, 239, 0.2)', color: '#d946ef', border: '1px solid rgba(217, 70, 239, 0.5)' }}>
-                [OPTIMASI]
-              </span>
-            ) : markedClipsList.length > 0 ? (
+            {markedClipsList.length > 0 ? (
               <span className="workflow-tab-count">
                 [{markedClipsList.length} READY]
               </span>
@@ -3680,7 +3451,7 @@ Transcript:
                       gap: '0.4rem'
                     }}
                   >
-                    <span>[ 03 AUTO CLIPPER {(!isLocalhost && !isDevUnlocked) ? '🔒' : ''}</span>
+                    <span>[ 03 AUTO CLIPPER {false ? '🔒' : ''}</span>
                     <ArrowRight size={13} />
                     <span>]</span>
                   </button>
@@ -3716,16 +3487,16 @@ Transcript:
                     style={{
                       padding: '0.4rem 0.95rem',
                       fontSize: '0.78rem',
-                      background: (!isLocalhost && !isDevUnlocked) ? 'transparent' : 'var(--primary)',
-                      color: (!isLocalhost && !isDevUnlocked) ? 'var(--text-primary)' : '#000000',
-                      border: (!isLocalhost && !isDevUnlocked) ? '1px solid rgba(217, 70, 239, 0.5)' : undefined,
+                      background: false ? 'transparent' : 'var(--primary)',
+                      color: false ? 'var(--text-primary)' : '#000000',
+                      border: false ? '1px solid rgba(217, 70, 239, 0.5)' : undefined,
                       fontWeight: 700,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '0.4rem'
                     }}
                   >
-                    <span>[ 03 AUTO CLIPPER {(!isLocalhost && !isDevUnlocked) ? '🔒' : ''}</span>
+                    <span>[ 03 AUTO CLIPPER {false ? '🔒' : ''}</span>
                     <ArrowRight size={13} />
                     <span>]</span>
                   </button>
@@ -4517,280 +4288,14 @@ Transcript:
             )}
 
             <div className="form-settings-grid">
-              {/* Card 1: AI Engine Configuration */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem', borderRadius: 0, background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '0.9rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-                    [AI] {t.form.aiSettingsTitle}
-                  </h3>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {apiProvider === 'gemini' ? 'ENGINE: GOOGLE_GEMINI' : 'ENGINE: OPENROUTER_MULTILLM'}
-                  </span>
+              {/* AI credentials are managed only by the server. */}
+              <div className="server-ai-card">
+                <div className="server-ai-icon">✦</div>
+                <div>
+                  <h3>AI engine dikelola otomatis</h3>
+                  <p>Cukup masukkan link YouTube. Kunci AI disimpan di server dan tidak perlu dimasukkan atau ditampilkan di browser.</p>
+                  <span className="server-ai-status"><span /> Server-managed AI · Tidak perlu input API key</span>
                 </div>
-
-                {/* Provider Selection Tabs */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#0a0a0f', padding: '3px', border: '1px solid rgba(255, 0, 255, 0.2)' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiProvider('gemini');
-                      localStorage.setItem('cheat_clip_api_provider', 'gemini');
-                      setError(null);
-                    }}
-                    style={{
-                      padding: '0.55rem 0.75rem',
-                      background: apiProvider === 'gemini' ? '#ff00ff' : 'transparent',
-                      color: apiProvider === 'gemini' ? '#000000' : 'rgba(255, 255, 255, 0.7)',
-                      border: 'none',
-                      fontWeight: 700,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      letterSpacing: '0.04em',
-                      transition: 'all 0.15s ease',
-                      boxShadow: apiProvider === 'gemini' ? '0 0 10px rgba(255, 0, 255, 0.4)' : 'none',
-                    }}
-                  >
-                    {t.form.providerGemini}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiProvider('openrouter');
-                      localStorage.setItem('cheat_clip_api_provider', 'openrouter');
-                      setError(null);
-                    }}
-                    style={{
-                      padding: '0.55rem 0.75rem',
-                      background: apiProvider === 'openrouter' ? '#ff00ff' : 'transparent',
-                      color: apiProvider === 'openrouter' ? '#000000' : 'rgba(255, 255, 255, 0.7)',
-                      border: 'none',
-                      fontWeight: 700,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      letterSpacing: '0.04em',
-                      transition: 'all 0.15s ease',
-                      boxShadow: apiProvider === 'openrouter' ? '0 0 10px rgba(255, 0, 255, 0.4)' : 'none',
-                    }}
-                  >
-                    {t.form.providerOpenRouter}
-                  </button>
-                </div>
-
-                {/* Provider Content: GEMINI */}
-                {apiProvider === 'gemini' ? (
-                  <>
-                    {/* Gemini API Key input */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          {t.form.apiKeyLabel}
-                          <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', fontWeight: 800, color: '#ff1e27', background: 'rgba(255, 30, 39, 0.15)', border: '1px solid #ff1e27', borderRadius: 0, padding: '0.1rem 0.45rem', letterSpacing: '0.05em', boxShadow: '0 0 8px rgba(255, 30, 39, 0.3)' }}>{t.form.apiKeyRequired}</span>
-                        </span>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <a
-                            href="https://aistudio.google.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600, transition: 'var(--transition-smooth)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                            className="action-link-btn"
-                          >
-                            <ExternalLink size={12} /> {t.form.getFreeKey}
-                          </a>
-                        </div>
-                      </label>
-                      <HackerApiKeyInput
-                        id="gemini-key-input"
-                        value={apiKey}
-                        onChange={(val) => {
-                          setApiKey(val);
-                          localStorage.setItem('cheat_clip_gemini_api_key', val);
-                          if (val.trim()) setError(null);
-                        }}
-                        disabled={loading}
-                        placeholder={t.form.apiKeyPlaceholder}
-                        error={!apiKey.trim()}
-                        revealLabel={t.form.revealKey}
-                        maskLabel={t.form.maskKey}
-                      />
-                      {!apiKey.trim() && (
-                        <span style={{ fontSize: '0.75rem', color: '#ff1e27', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 600 }}>
-                          <AlertTriangle size={13} color="#ff1e27" />
-                          {t.form.apiKeyErrorHint}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Gemini AI Model Selection */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        <span>{t.form.aiModelLabel}</span>
-                        {loadingModels && (
-                          <span style={{ fontSize: '0.72rem', color: 'var(--primary)', animation: 'pulse 1.5s infinite ease-in-out' }}>
-                            ⏳ {t.form.fetchingModels}
-                          </span>
-                        )}
-                      </label>
-                      <select
-                        className="form-input"
-                        value={selectedModel}
-                        onChange={(e) => {
-                          setSelectedModel(e.target.value);
-                          localStorage.setItem('cheat_clip_selected_model', e.target.value);
-                        }}
-                        disabled={loading}
-                        style={{ padding: '0.6rem 1rem', fontSize: '0.875rem', height: '42px', cursor: 'pointer', appearance: 'auto', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 0 }}
-                      >
-                        {availableModels.length > 0 ? (
-                          availableModels.map((m) => (
-                            <option key={m} value={m} style={{ background: '#0a0a0f', color: '#fff' }}>
-                              {m}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            <option value="gemini-2.5-flash" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-2.5-flash (Fast & recommended - Free tier friendly)</option>
-                            <option value="gemini-2.5-flash-lite" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-2.5-flash-lite (Ultra-fast & lightweight)</option>
-                            <option value="gemini-2.0-flash" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-2.0-flash (Fast & responsive)</option>
-                            <option value="gemini-2.0-flash-lite" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-2.0-flash-lite (Lightweight flash)</option>
-                            <option value="gemini-1.5-flash" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-1.5-flash (Fallback flash)</option>
-                            <option value="gemini-2.5-pro" style={{ background: '#0a0a0f', color: '#fff' }}>gemini-2.5-pro (Creative & complex - High quota)</option>
-                          </>
-                        )}
-                      </select>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.2rem' }}>
-                        NOTE: <strong>{t.form.resilienceTip}</strong> {t.form.resilienceDesc}
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* OpenRouter API Key input */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <label style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          {t.form.openrouterKeyLabel}
-                          <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', fontWeight: 800, color: '#ff1e27', background: 'rgba(255, 30, 39, 0.15)', border: '1px solid #ff1e27', borderRadius: 0, padding: '0.1rem 0.45rem', letterSpacing: '0.05em', boxShadow: '0 0 8px rgba(255, 30, 39, 0.3)' }}>{t.form.apiKeyRequired}</span>
-                        </span>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <a
-                            href="https://openrouter.ai/settings/keys"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600, transition: 'var(--transition-smooth)', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                            className="action-link-btn"
-                          >
-                            <ExternalLink size={12} /> {t.form.openrouterGetFreeKey}
-                          </a>
-                        </div>
-                      </label>
-                      <HackerApiKeyInput
-                        id="openrouter-key-input"
-                        value={openRouterKey}
-                        onChange={(val) => {
-                          setOpenRouterKey(val);
-                          localStorage.setItem('cheat_clip_openrouter_key', val);
-                          if (val.trim()) setError(null);
-                        }}
-                        disabled={loading}
-                        placeholder={t.form.openrouterKeyPlaceholder}
-                        error={!openRouterKey.trim()}
-                        revealLabel={t.form.revealKey}
-                        maskLabel={t.form.maskKey}
-                      />
-                      {!openRouterKey.trim() && (
-                        <span style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /></svg>
-                          {t.form.apiKeyErrorHint}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* OpenRouter Model Selection */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                          {t.form.openrouterModelLabel}
-                        </label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          {loadingOpenRouterModels && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--primary)', animation: 'pulse 1.5s infinite ease-in-out' }}>
-                              ⏳ {t.form.fetchingModels}
-                            </span>
-                          )}
-                          <span
-                            onClick={() => setIsCustomOpenRouterModel(!isCustomOpenRouterModel)}
-                            style={{
-                              cursor: 'pointer',
-                              color: isCustomOpenRouterModel ? 'var(--primary)' : 'var(--text-muted)',
-                              fontSize: '0.72rem',
-                              fontFamily: "'JetBrains Mono', monospace",
-                              textDecoration: 'underline'
-                            }}
-                          >
-                            {isCustomOpenRouterModel ? '[SELECT PRESET]' : '[CUSTOM ID]'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {isCustomOpenRouterModel ? (
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="e.g. qwen/qwen-2.5-72b-instruct or deepseek/deepseek-r1"
-                          value={customOpenRouterModel || openRouterModel}
-                          onChange={(e) => {
-                            const val = e.target.value.trim();
-                            setCustomOpenRouterModel(val);
-                            setOpenRouterModel(val);
-                            localStorage.setItem('cheat_clip_openrouter_model', val);
-                          }}
-                          disabled={loading}
-                          style={{ height: '42px', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.85rem' }}
-                        />
-                      ) : (
-                        <select
-                          className="form-input"
-                          value={openRouterModel}
-                          onChange={(e) => {
-                            setOpenRouterModel(e.target.value);
-                            localStorage.setItem('cheat_clip_openrouter_model', e.target.value);
-                          }}
-                          disabled={loading}
-                          style={{ padding: '0.6rem 1rem', fontSize: '0.875rem', height: '42px', cursor: 'pointer', appearance: 'auto', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 0 }}
-                        >
-                          {openRouterModels.length > 0 ? (
-                            openRouterModels.map((m) => (
-                              <option key={m.id} value={m.id} style={{ background: '#0a0a0f', color: '#fff' }}>
-                                {m.name || m.id} {m.recommended ? '[RECOMMENDED]' : ''}
-                              </option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="google/gemini-2.5-flash" style={{ background: '#0a0a0f', color: '#fff' }}>Google: Gemini 2.5 Flash [RECOMMENDED]</option>
-                              <option value="google/gemini-2.0-flash-001" style={{ background: '#0a0a0f', color: '#fff' }}>Google: Gemini 2.0 Flash</option>
-                              <option value="anthropic/claude-3.5-sonnet" style={{ background: '#0a0a0f', color: '#fff' }}>Anthropic: Claude 3.5 Sonnet [RECOMMENDED]</option>
-                              <option value="anthropic/claude-3.5-haiku" style={{ background: '#0a0a0f', color: '#fff' }}>Anthropic: Claude 3.5 Haiku</option>
-                              <option value="deepseek/deepseek-chat" style={{ background: '#0a0a0f', color: '#fff' }}>DeepSeek: DeepSeek V3 [RECOMMENDED]</option>
-                              <option value="meta-llama/llama-3.3-70b-instruct" style={{ background: '#0a0a0f', color: '#fff' }}>Meta: Llama 3.3 70B Instruct</option>
-                              <option value="openai/gpt-4o-mini" style={{ background: '#0a0a0f', color: '#fff' }}>OpenAI: GPT-4o Mini</option>
-                              <option value="openai/gpt-4o" style={{ background: '#0a0a0f', color: '#fff' }}>OpenAI: GPT-4o</option>
-                              <option value="qwen/qwen-2.5-72b-instruct" style={{ background: '#0a0a0f', color: '#fff' }}>Qwen: Qwen 2.5 72B Instruct</option>
-                              <option value="mistralai/mistral-large-2411" style={{ background: '#0a0a0f', color: '#fff' }}>Mistral: Mistral Large 2</option>
-                              <option value="google/gemini-2.5-pro" style={{ background: '#0a0a0f', color: '#fff' }}>Google: Gemini 2.5 Pro</option>
-                            </>
-                          )}
-                        </select>
-                      )}
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.2rem', display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
-                        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style={{ flexShrink: 0, marginTop: '1px', opacity: 0.7 }}><path d="M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM8 5a.75.75 0 1 1 0 1.5A.75.75 0 0 1 8 5zm-.75 2.5h1.5v4h-1.5v-4z"/></svg>
-                        <span><strong>Same-Family Fallback:</strong> {t.form.openrouterResilienceDesc}</span>
-                      </span>
-                    </div>
-                  </>
-                )}
-
               </div>
 
               {/* Card 2: Clip Parameters & Focus */}
@@ -6814,81 +6319,7 @@ Transcript:
         {/* Embedded Clip Studio Section or Maintenance Card */}
         {result && (
           <div style={{ display: workflowTab === 'clipper' ? 'block' : 'none' }}>
-            {(!isLocalhost && !isDevUnlocked) ? (
-              <div className="glass-panel" style={{
-                padding: '2.5rem 2rem',
-                textAlign: 'center',
-                background: 'linear-gradient(180deg, rgba(20, 15, 30, 0.95), rgba(10, 8, 16, 0.98))',
-                border: '1.5px solid rgba(217, 70, 239, 0.4)',
-                boxShadow: '0 0 30px rgba(217, 70, 239, 0.2)',
-                maxWidth: '680px',
-                margin: '2rem auto'
-              }}>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'rgba(217, 70, 239, 0.15)',
-                  border: '1px solid #d946ef',
-                  marginBottom: '1.25rem',
-                  boxShadow: '0 0 15px rgba(217, 70, 239, 0.4)'
-                }}>
-                  <Wrench size={32} color="#d946ef" />
-                </div>
-                <h3 style={{ fontSize: '1.25rem', fontFamily: 'var(--font-mono)', fontWeight: 800, color: '#fff', marginBottom: '0.8rem', letterSpacing: '0.04em' }}>
-                  🛠️ FITUR AUTO CLIPPER SEDANG DALAM PENINGKATAN
-                </h3>
-                <p style={{ color: '#cbd5e1', fontSize: '0.92rem', lineHeight: 1.6, maxWidth: '540px', margin: '0 auto 1.5rem' }}>
-                  Fitur rendering &amp; auto-cropping video pada server deployment sedang dioptimasi untuk menghasilkan proses render yang lebih cepat dan bebas antrean.
-                </p>
-                <div style={{
-                  padding: '1rem',
-                  background: 'rgba(217, 70, 239, 0.08)',
-                  border: '1px solid rgba(217, 70, 239, 0.3)',
-                  color: '#f8fafc',
-                  fontSize: '0.85rem',
-                  lineHeight: 1.5,
-                  maxWidth: '540px',
-                  margin: '0 auto 1.8rem',
-                  textAlign: 'left'
-                }}>
-                  ✨ <strong>Rekomendasi:</strong> Anda tetap dapat menikmati seluruh hasil deteksi momen viral, memutar segmen video, dan mengekspor daftar timestamp di <strong>Tab 02 // RECOMMENDED CLIPS</strong>.
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className="glowing-btn"
-                    onClick={() => setWorkflowTab('clips')}
-                    style={{
-                      padding: '0.65rem 1.6rem',
-                      background: 'var(--primary)',
-                      color: '#000',
-                      fontWeight: 800,
-                      fontSize: '0.88rem'
-                    }}
-                  >
-                    [ &lt;- KEMBALI KE TAB 02 // CLIPS ]
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasscodeDialog(true)}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid #332d4a',
-                      color: 'var(--text-muted)',
-                      padding: '0.6rem 1.1rem',
-                      fontSize: '0.78rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🔑 Mode Tester / Admin
-                  </button>
-                </div>
-              </div>
-            ) : (
+            
               <Suspense fallback={
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '360px', color: '#888' }}>
                   <span className="pulsing-text">Loading Studio Engine...</span>
@@ -6898,7 +6329,6 @@ Transcript:
                   videoUrl={result.video_url || url}
                   videoId={result.video_id}
                   allClips={result.clips}
-                  transcript={result.transcript || []}
                   markedClips={markedClipsList}
                   activeClip={activeClip}
                   onStartRender={handleStartBatchRender}
@@ -6919,11 +6349,10 @@ Transcript:
                   onCancelRender={handleCancelRender}
                   isCancellingRender={isCancellingRender}
                   allowAppUpdates={allowAppUpdates}
-                  onOpenCookiesModal={() => setIsCookiesModalOpen(true)}
                   onBackToClips={() => setWorkflowTab('clips')}
                 />
               </Suspense>
-            )}
+
           </div>
         )}
 
@@ -7050,125 +6479,6 @@ Transcript:
                   [ LANJUTKAN HACK CLIPS → ]
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Clipper Maintenance Info Modal (When normal user clicks Tab 03 in deployment) */}
-        {showClipperMaintenanceModal && (
-          <div className="custom-confirm-modal-overlay" style={{ zIndex: 10005 }}>
-            <div className="custom-confirm-modal-card" style={{ maxWidth: '520px', background: '#0a0910', border: '1.5px solid #d946ef', boxShadow: '0 0 35px rgba(217, 70, 239, 0.35)', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #272238', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Wrench size={18} color="#d946ef" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', letterSpacing: '0.04em' }}>
-                    FITUR AUTO CLIPPER SEDANG DALAM PENINGKATAN
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowClipperMaintenanceModal(false)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
-                  aria-label="Tutup"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <p style={{ color: '#cbd5e1', fontSize: '0.86rem', lineHeight: 1.6, marginBottom: '1rem' }}>
-                Fitur rendering &amp; auto-cropping video pada server deployment sedang dioptimasi untuk kecepatan dan kestabilan performa cloud yang lebih tinggi.
-              </p>
-
-              <div style={{ padding: '0.75rem 0.9rem', background: 'rgba(217, 70, 239, 0.08)', border: '1px solid rgba(217, 70, 239, 0.25)', marginBottom: '1.25rem', fontSize: '0.82rem', color: '#f1f5f9', lineHeight: 1.5 }}>
-                💡 <strong>Tips:</strong> Anda tetap dapat melihat, memutar, dan mengekspor seluruh daftar rekomendasi klip viral beserta timestamp di <strong>Tab 02 // RECOMMENDED CLIPS</strong>.
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="glowing-btn"
-                  onClick={() => { setShowClipperMaintenanceModal(false); setWorkflowTab('clips'); }}
-                  style={{ padding: '0.55rem 1.25rem', fontSize: '0.82rem', background: 'var(--primary)', color: '#000', fontWeight: 700 }}
-                >
-                  [ Mengerti, Buka Tab 02 ]
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowClipperMaintenanceModal(false); setShowPasscodeDialog(true); }}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.74rem', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  🔑 Akses Developer / Tester
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Developer Passcode Dialog */}
-        {showPasscodeDialog && (
-          <div className="custom-confirm-modal-overlay" style={{ zIndex: 10006 }}>
-            <div className="custom-confirm-modal-card" style={{ maxWidth: '440px', background: '#0a0910', border: '1.5px solid #00f0ff', boxShadow: '0 0 30px rgba(0, 240, 255, 0.35)', textAlign: 'left' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #272238', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Lock size={16} color="#00f0ff" />
-                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', letterSpacing: '0.04em' }}>
-                    MASUKKAN PASSCODE PENGEMBANG
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setShowPasscodeDialog(false); setPasscodeInput(''); setPasscodeError(''); }}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}
-                  aria-label="Tutup"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: 1.5 }}>
-                Masukkan passcode developer untuk membuka akses Tab 03 Auto Clipper di server deployment ini. Anda juga bisa menggunakan URL param <code>?dev=1</code>.
-              </p>
-
-              <form onSubmit={(e) => { e.preventDefault(); handleUnlockWithPasscode(passcodeInput); }}>
-                <input
-                  type="password"
-                  placeholder="Passcode pengembang..."
-                  value={passcodeInput}
-                  onChange={(e) => { setPasscodeInput(e.target.value); setPasscodeError(''); }}
-                  style={{
-                    width: '100%',
-                    padding: '0.65rem 0.8rem',
-                    background: '#12111a',
-                    border: passcodeError ? '1px solid #ef4444' : '1px solid #332d4a',
-                    color: '#fff',
-                    borderRadius: 4,
-                    marginBottom: '0.5rem',
-                    fontSize: '0.88rem',
-                    boxSizing: 'border-box'
-                  }}
-                  autoFocus
-                />
-                {passcodeError && (
-                  <div style={{ color: '#ef4444', fontSize: '0.75rem', marginBottom: '0.75rem', fontWeight: 600 }}>
-                    [!] {passcodeError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setShowPasscodeDialog(false); setPasscodeInput(''); setPasscodeError(''); }}
-                    style={{ padding: '0.5rem 1rem', background: '#1e1c2b', border: 'none', color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: '0.8rem' }}
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    style={{ padding: '0.5rem 1.25rem', background: 'linear-gradient(135deg, #00f0ff, #0077ff)', border: 'none', color: '#000', fontWeight: 700, borderRadius: 4, cursor: 'pointer', fontSize: '0.82rem' }}
-                  >
-                    Buka Akses
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
         )}

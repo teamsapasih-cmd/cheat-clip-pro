@@ -18,9 +18,8 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../locales';
 import { resilientFetch } from '../utils/api';
-import { getStoredCookies, hasStoredCookies } from '../utils/cookieUtils';
+import { getStoredCookies } from '../utils/cookieUtils';
 import { detectFaceClientSide } from '../utils/clientFaceDetector';
-import { isMobileDevice } from '../utils/deviceUtils';
 import { isWebCodecsGpuSupported } from '../services/webcodecsRenderer';
 import type {
   ViralClip,
@@ -41,49 +40,8 @@ import type {
   HardwareAccelOption,
   HardwareAccelInfo,
   FontItem,
-  TranscriptLine,
 } from '../types';
 import { getFontWeightForFamily, getFontFamilyWithFallback, wrapTitleSmart } from '../services/captionUtils';
-
-interface CaptionWord {
-  text: string;
-  start: number;
-  end: number;
-}
-
-interface CaptionChunk {
-  words: CaptionWord[];
-  start: number;
-  end: number;
-}
-
-function cleanCaptionText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\[.*?\]|\(.*?\)|[*].*?[*]/g, ' ')
-    .replace(/\b(laughter|applause|music|cheering|snickering|giggle|cough)\b/gi, ' ')
-    .replace(/^\s*[\.,…:;]+\s*/, '')
-    .replace(/\s*[\.,…:;]+\s*$/, '')
-    .replace(/[^\w\s.,%&$?]|_/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-const CAPTION_STYLE_CONFIG: Record<CaptionStyle, { highlight: string; sample: [string, string] }> = {
-  viral_pop: { highlight: '#FFE600', sample: ['VIRAL', 'POP'] },
-  beast_punch: { highlight: '#00FF66', sample: ['UNREAL', 'HACK'] },
-  cyber_violet: { highlight: '#D946EF', sample: ['CYBER', 'PUNCH'] },
-  fire_red: { highlight: '#FF2E2E', sample: ['HOT', 'FIRE'] },
-  electric_cyan: { highlight: '#00F0FF', sample: ['ELECTRIC', 'CYAN'] },
-  golden_aura: { highlight: '#FFB800', sample: ['GOLDEN', 'MOMENT'] },
-  clean_minimal: { highlight: '#38BDF8', sample: ['CLEAN', 'SUBTITLE'] },
-  none: { highlight: '#FFFFFF', sample: ['', ''] },
-};
 
 interface ClipStudioSectionProps {
   videoUrl: string;
@@ -102,9 +60,7 @@ interface ClipStudioSectionProps {
   onCancelRender?: () => void;
   isCancellingRender?: boolean;
   allowAppUpdates?: boolean;
-  onOpenCookiesModal?: () => void;
   onBackToClips?: () => void;
-  transcript?: TranscriptLine[];
 }
 
 function getFriendlyErrorMessage(rawMsg: string): string {
@@ -114,7 +70,7 @@ function getFriendlyErrorMessage(rawMsg: string): string {
     return 'Download interrupted by internet lag ("moov atom not found"). The video stream was cut off before finishing. Click "[~] Retry" to re-download.';
   }
   if (lower.includes("bot verification") || lower.includes("sign in") || lower.includes("confirm you're not a bot")) {
-    return 'YouTube requires cookies verification. Click the [*] Cookies Manager button in the top navbar to save your YouTube cookies.';
+    return 'YouTube is blocking automated downloads from the server. Upload a video file that you own or have permission to use, then render again.';
   }
   if (lower.includes("rendering timed out") || (lower.includes("timed out") && lower.includes("rendering"))) {
     return 'Video rendering timed out due to duration/complexity. Click "[~] Retry" or switch to Universal CPU encoder in Studio Settings.';
@@ -129,7 +85,7 @@ function getFriendlyErrorMessage(rawMsg: string): string {
     return 'Disk storage is full. Please click "[x] Clear Temp" to free up storage space.';
   }
   if (lower.includes("whisper") || lower.includes("transcribe")) {
-    return 'Word transcription failed. Check your audio track or switch subtitle style to none.';
+    return 'Subtitle Animasi Tingkat Kata gagal dibuat dari audio klip. Periksa kualitas audio atau coba render ulang.';
   }
   if (lower.includes("ffmpeg") || lower.includes("filter_complex")) {
     return 'FFmpeg video rendering failed during composition. Check error details below.';
@@ -312,7 +268,7 @@ export const DEFAULT_STUDIO_PREFS: Required<StudioPreferences> = {
   subtitlePositionMode: 'bottom',
   titleDuration: 'entire',
   originalAudioVolume: 100,
-  hardwareAccel: 'client_gpu',
+  hardwareAccel: 'cpu',
   titleYPercent: 17,
   titleXPercent: 50,
   subtitleYPercent: 21,
@@ -356,25 +312,10 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   onCancelRender,
   isCancellingRender = false,
   allowAppUpdates = false,
-  onOpenCookiesModal,
   onBackToClips,
-  transcript = [],
 }) => {
   const { t } = useLanguage();
-  const isYouTube = !videoId?.startsWith('upload_') && !videoId?.startsWith('gdrive_') && !videoId?.startsWith('twitch_') && !videoUrl?.includes('/api/video') && !videoUrl?.includes('twitch.tv');
   const isTwitch = Boolean(videoId?.startsWith('twitch_') || videoUrl?.includes('twitch.tv'));
-  const [hasCookies, setHasCookies] = useState<boolean>(() => hasStoredCookies());
-
-  useEffect(() => {
-    const handleCookieChange = () => setHasCookies(hasStoredCookies());
-    window.addEventListener('storage', handleCookieChange);
-    window.addEventListener('cheatclip_cookies_updated', handleCookieChange);
-    return () => {
-      window.removeEventListener('storage', handleCookieChange);
-      window.removeEventListener('cheatclip_cookies_updated', handleCookieChange);
-    };
-  }, []);
-
   // Directly reflect marked clips (supports selecting 0 clips)
   const [selectedClips, setSelectedClips] = useState<ViralClip[]>(markedClips);
   const [previewClipIndex, setPreviewClipIndex] = useState<number>(0);
@@ -390,7 +331,10 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const [titleSuffix, setTitleSuffix] = useState<string>(() => getSavedStudioPreferences().titleSuffix ?? DEFAULT_STUDIO_PREFS.titleSuffix);
   const [customClipTitles, setCustomClipTitles] = useState<Record<string, string>>({});
   const [titlePosition, setTitlePosition] = useState<TitlePosition>(() => getSavedStudioPreferences().titlePosition ?? DEFAULT_STUDIO_PREFS.titlePosition);
-  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => getSavedStudioPreferences().captionStyle ?? DEFAULT_STUDIO_PREFS.captionStyle);
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(() => {
+    const savedStyle = getSavedStudioPreferences().captionStyle;
+    return savedStyle && savedStyle !== 'none' ? savedStyle : 'viral_pop';
+  });
   const [lastActiveCaptionStyle, setLastActiveCaptionStyle] = useState<CaptionStyle>(() => {
     const cap = getSavedStudioPreferences().captionStyle ?? DEFAULT_STUDIO_PREFS.captionStyle;
     return cap !== 'none' ? cap : 'viral_pop';
@@ -485,15 +429,8 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
 
   // Hardware acceleration / Video Encoder state:
   // Defaults to Client GPU Hardware Acceleration ('client_gpu') to offload all rendering work to user's device (0% server load)
-  const [hardwareAccel, setHardwareAccel] = useState<HardwareAccelOption>(() => {
-    const saved = getSavedStudioPreferences().hardwareAccel;
-    if (saved) {
-      if (saved === 'client_gpu' && isWebCodecsGpuSupported()) return 'client_gpu';
-      if (saved === 'browser_wasm') return 'browser_wasm';
-      if (saved === 'auto' || saved === 'cpu') return saved;
-    }
-    return isWebCodecsGpuSupported() ? 'client_gpu' : 'browser_wasm';
-  });
+  // Use the reliable server CPU renderer by default; client GPU/WASM remains an explicit opt-in.
+  const [hardwareAccel, setHardwareAccel] = useState<HardwareAccelOption>('cpu');
   const [hardwareInfo, setHardwareInfo] = useState<HardwareAccelInfo | null>(null);
   const [hwDropdownOpen, setHwDropdownOpen] = useState<boolean>(false);
 
@@ -636,155 +573,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
   const clipStart = currentPreviewClip ? currentPreviewClip.start_time : 0;
   const clipEnd = currentPreviewClip ? currentPreviewClip.end_time : 60;
   const clipDuration = Math.max(1, clipEnd - clipStart);
-
-  // Precompute and partition caption words/chunks for currentPreviewClip
-  const captionChunks = useMemo<CaptionChunk[]>(() => {
-    if (!currentPreviewClip) return [];
-    const clipStart = currentPreviewClip.start_time;
-    const clipEnd = currentPreviewClip.end_time;
-
-    const allWords: CaptionWord[] = [];
-
-    // 1. Primary: Extract from timestamped transcript lines
-    if (transcript && transcript.length > 0) {
-      const relevantLines = transcript.filter(line => {
-        const lStart = line.start;
-        const lEnd = (typeof line.end === 'number' && line.end > lStart) ? line.end : (lStart + ((line as any).duration || 2.0));
-        return lEnd >= clipStart - 0.5 && lStart <= clipEnd + 0.5;
-      });
-
-      for (const line of relevantLines) {
-        const cleaned = cleanCaptionText(line.text || '');
-        if (!cleaned) continue;
-        const lStart = line.start;
-        const lEnd = (typeof line.end === 'number' && line.end > lStart) ? line.end : (lStart + ((line as any).duration || 2.0));
-        const tokens = cleaned.split(/\s+/).filter(Boolean);
-        if (!tokens.length) continue;
-
-        // Natural speech duration calibration:
-        // Respect the actual sentence duration unless trailing silence is detected
-        const rawLineDur = Math.max(0.4, lEnd - lStart);
-        const maxPlausibleDur = tokens.length * 0.52 + 0.25;
-        const spokenDuration = Math.min(rawLineDur, maxPlausibleDur);
-
-        const tokenWeights = tokens.map(t => Math.max(2, t.replace(/[^a-zA-Z0-9]/g, '').length || t.length));
-        const totalWeight = tokenWeights.reduce((a, b) => a + b, 0);
-
-        let curTime = lStart;
-        tokens.forEach((tok, idx) => {
-          const ratio = tokenWeights[idx] / Math.max(1, totalWeight);
-          const wDur = Math.max(0.14, Math.min(0.60, spokenDuration * ratio));
-          const wStart = curTime;
-          const wEnd = wStart + wDur;
-          curTime = wEnd;
-
-          allWords.push({
-            text: tok,
-            start: wStart,
-            end: wEnd,
-          });
-        });
-      }
-    }
-
-    // 2. Fallback: If no transcript lines found, use currentPreviewClip.transcript (string)
-    if (allWords.length === 0 && currentPreviewClip.transcript) {
-      const cleaned = cleanCaptionText(currentPreviewClip.transcript);
-      const tokens = cleaned.split(/\s+/).filter(Boolean);
-      if (tokens.length > 0) {
-        const duration = Math.max(1, clipEnd - clipStart);
-        const maxPlausibleDur = tokens.length * 0.52 + 0.25;
-        const spokenDuration = Math.min(duration, maxPlausibleDur);
-        const tokenWeights = tokens.map(t => Math.max(2, t.replace(/[^a-zA-Z0-9]/g, '').length || t.length));
-        const totalWeight = tokenWeights.reduce((a, b) => a + b, 0);
-
-        let curTime = clipStart;
-        tokens.forEach((tok, idx) => {
-          const ratio = tokenWeights[idx] / Math.max(1, totalWeight);
-          const wDur = Math.max(0.14, Math.min(0.60, spokenDuration * ratio));
-          const wStart = curTime;
-          const wEnd = wStart + wDur;
-          curTime = wEnd;
-
-          allWords.push({
-            text: tok,
-            start: wStart,
-            end: wEnd,
-          });
-        });
-      }
-    }
-
-    if (allWords.length === 0) return [];
-
-    // Group words into punchy chunks of 1 to 3 words (max 18 chars), splitting on punctuation or pauses >= 0.28s
-    const chunks: CaptionChunk[] = [];
-    let currentWords: CaptionWord[] = [];
-    let currentChars = 0;
-
-    for (const w of allWords) {
-      const wLen = w.text.length;
-      const hasPause = currentWords.length > 0 && (w.start - currentWords[currentWords.length - 1].end >= 0.28);
-      const endsSentence = currentWords.length > 0 && /[.?!,]$/.test(currentWords[currentWords.length - 1].text);
-
-      if (currentWords.length >= 3 || hasPause || endsSentence || (currentWords.length > 0 && currentChars + wLen > 18)) {
-        chunks.push({
-          words: currentWords,
-          start: currentWords[0].start,
-          end: currentWords[currentWords.length - 1].end,
-        });
-        currentWords = [w];
-        currentChars = wLen;
-      } else {
-        currentWords.push(w);
-        currentChars += wLen + 1;
-      }
-    }
-    if (currentWords.length > 0) {
-      chunks.push({
-        words: currentWords,
-        start: currentWords[0].start,
-        end: currentWords[currentWords.length - 1].end,
-      });
-    }
-
-    return chunks;
-  }, [transcript, currentPreviewClip]);
-
-  // Compute active chunk and word index for currentTime with user-adjustable sync offset
-  const activeCaption = useMemo(() => {
-    if (!captionChunks.length) return null;
-
-    // Apply user-adjustable sync offset: positive means captions appear later; negative means earlier
-    const playhead = currentTime - subtitleOffsetSeconds;
-
-    const activeChunk = captionChunks.find(c => playhead >= (c.start - 0.06) && playhead <= (c.end + 0.25));
-    if (activeChunk) {
-      const activeIdx = activeChunk.words.findIndex(w => playhead >= w.start && playhead <= w.end);
-      const wordIndex = activeIdx !== -1 ? activeIdx : (playhead > activeChunk.words[activeChunk.words.length - 1].end ? activeChunk.words.length - 1 : 0);
-      return { chunk: activeChunk, activeWordIndex: wordIndex };
-    }
-
-    // When paused outside active speech, find closest chunk
-    if (!isPlaying) {
-      let closest: CaptionChunk | null = null;
-      let minDiff = Infinity;
-      for (const c of captionChunks) {
-        const diff = Math.min(Math.abs(playhead - c.start), Math.abs(playhead - c.end));
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = c;
-        }
-      }
-      if (closest && minDiff < 2.0) {
-        const wordIndex = playhead >= closest.end ? closest.words.length - 1 : 0;
-        return { chunk: closest, activeWordIndex: wordIndex };
-      }
-    }
-
-    return null;
-  }, [captionChunks, currentTime, subtitleOffsetSeconds, isPlaying]);
-
 
 
   // Fetch face/object detection coordinates
@@ -970,9 +758,17 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
               try {
                 event.target.mute();
                 setIsMuted(true);
+                // Keep YouTube's native caption track disabled. Rendered captions are generated from clip audio.
                 if (typeof event.target.unloadModule === 'function') {
                   event.target.unloadModule('captions');
                   event.target.unloadModule('cc');
+                }
+                if (typeof event.target.setOption === 'function') {
+                  try {
+                    event.target.setOption('captions', 'track', {});
+                  } catch (captionOptionError) {
+                    // Some embedded videos do not expose the captions module.
+                  }
                 }
                 event.target.seekTo(clipStart, true);
                 setCurrentTime(clipStart);
@@ -1907,6 +1703,7 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
       titleFontSize,
       titleFontSizePx,
       titleTextCase,
+      // Generate animated word-level captions from the clip audio, never from Supadata's analysis transcript.
       subtitlesEnabled: captionStyle !== 'none',
       captionStyle,
       captionFont,
@@ -1946,7 +1743,7 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
       originalAudioVolume,
       // Hardware Acceleration / Video Encoder
       hardwareAccel,
-      renderEngine: isMobileDevice() ? 'server' : ((hardwareAccel === 'browser_wasm' || hardwareAccel === 'client_gpu') ? 'client' : 'server'),
+      renderEngine: 'server',
       // Multi-Segment Merged Highlight Video
       renderMode,
       compilationTitle: compilationTitle.trim() || undefined,
@@ -4891,84 +4688,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
                   );
                 })()}
 
-                {/* Subtitle Overlay with Real-time Up/Down Position & Scaled Font */}
-                {captionStyle !== 'none' && (
-                  <div
-                    className={`wireframe-caption-overlay style-${captionStyle}${subtitlePositionMode === 'center' ? ' mode-center' : ''}`}
-                    style={{
-                      ...(subtitlePositionMode === 'center'
-                        ? {
-                            top: `${safeSubCenterY}%`,
-                            bottom: 'auto',
-                            transform: 'translateY(-50%)',
-                          }
-                        : {
-                            bottom: `${safeSubtitleY}%`,
-                            top: 'auto',
-                            transform: 'none',
-                          }),
-                      zIndex: 35,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <span
-                      className="wireframe-caption-text"
-                      style={{
-                        fontFamily: getFontFamilyWithFallback(captionFont),
-                        fontSize: (() => {
-                          const scale = isLandscape ? (320 / 1920) : (320 / 1080);
-                          const px = Math.round(fontSizePx * scale);
-                          const minPx = 4;
-                          return `${Math.max(minPx, px)}px`;
-                        })(),
-                        fontWeight: getFontWeightForFamily(captionFont) as any,
-                        letterSpacing: '0.03em',
-                        textAlign: 'center',
-                        textShadow: '0 0 2px #000, 0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.8)',
-                        display: 'inline-block',
-                      }}
-                    >
-                      {activeCaption ? (
-                        activeCaption.chunk.words.map((w, idx) => {
-                          const isActive = idx === activeCaption.activeWordIndex;
-                          const currentStyle = CAPTION_STYLE_CONFIG[captionStyle] || CAPTION_STYLE_CONFIG.viral_pop;
-                          const color = isActive ? currentStyle.highlight : '#ffffff';
-                          return (
-                            <React.Fragment key={idx}>
-                              {idx > 0 && ' '}
-                              <span
-                                style={{
-                                  color,
-                                  transform: isActive ? 'scale(1.08)' : 'scale(1)',
-                                  display: 'inline-block',
-                                  transition: 'transform 0.08s ease, color 0.08s ease',
-                                  textShadow: isActive
-                                    ? `0 0 3px #000, 0 1px 4px rgba(0,0,0,0.95), 0 0 8px ${currentStyle.highlight}88`
-                                    : '0 0 2px #000, 0 1px 3px rgba(0,0,0,0.95), 0 0 5px rgba(0,0,0,0.8)',
-                                }}
-                              >
-                                {applyLetterCase(w.text, textCase)}
-                              </span>
-                            </React.Fragment>
-                          );
-                        })
-                      ) : isPlaying ? (
-                        null
-                      ) : (
-                        (() => {
-                          const currentStyle = CAPTION_STYLE_CONFIG[captionStyle] || CAPTION_STYLE_CONFIG.viral_pop;
-                          return (
-                            <>
-                              <span style={{ color: '#ffffff' }}>{applyLetterCase(currentStyle.sample[0], textCase)}</span>{' '}
-                              <span style={{ color: currentStyle.highlight }}>{applyLetterCase(currentStyle.sample[1], textCase)}</span>
-                            </>
-                          );
-                        })()
-                      )}
-                    </span>
-                  </div>
-                )}
-
                 {/* Real-time Watermark Overlay */}
                 {watermarkEnabled && (
                   <div
@@ -5277,7 +4996,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
                       }
                       const finalClipName = dupCount > 0 ? `${cleanTitle} (${dupCount})` : cleanTitle;
                       const dlUrlWithTitle = c.download_url
-                        ? `${c.download_url}${c.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`
+                        ? (c.download_url.startsWith('blob:')
+                          ? c.download_url
+                          : `${c.download_url}${c.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`)
                         : '';
 
                       return (
@@ -5347,50 +5068,6 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
           </span>
         </div>
 
-        {!hasCookies && isYouTube && (
-          <div
-            className="studio-cookie-warning-banner"
-            onClick={onOpenCookiesModal}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.75rem',
-              padding: '0.7rem 1.1rem',
-              borderRadius: '9px',
-              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(217, 119, 6, 0.06) 100%)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              cursor: onOpenCookiesModal ? 'pointer' : 'default',
-              margin: '0.65rem 0',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', textAlign: 'left' }}>
-              <span style={{ fontSize: '1.15rem' }}>[!]</span>
-              <span style={{ fontSize: '0.79rem', color: '#fbbf24', fontWeight: 500, lineHeight: 1.4 }}>
-                {t.cookieWarning.studioBannerWarning}
-              </span>
-            </div>
-            {onOpenCookiesModal && (
-              <span
-                style={{
-                  fontSize: '0.76rem',
-                  fontWeight: 700,
-                  color: '#34d399',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  border: '1px solid rgba(16, 185, 129, 0.35)',
-                  padding: '0.25rem 0.65rem',
-                  borderRadius: '6px',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {t.cookieWarning.studioBannerAction} →
-              </span>
-            )}
-          </div>
-        )}
 
         <div style={{ display: 'flex', gap: '0.65rem', width: '100%', alignItems: 'stretch' }}>
           <button
@@ -5847,7 +5524,9 @@ export const ClipStudioSection: React.FC<ClipStudioSectionProps> = ({
               }
               const finalClipName = dupCount > 0 ? `${cleanTitle} (${dupCount})` : cleanTitle;
               const dlUrlWithTitle = clip.download_url
-                ? `${clip.download_url}${clip.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`
+                ? (clip.download_url.startsWith('blob:')
+                  ? clip.download_url
+                  : `${clip.download_url}${clip.download_url.includes('?') ? '&' : '?'}title=${encodeURIComponent(finalClipName)}`)
                 : '';
 
                 const isError = clip.status === 'error';
