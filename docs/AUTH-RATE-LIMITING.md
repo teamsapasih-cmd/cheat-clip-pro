@@ -1,8 +1,10 @@
 # Authentication rate-limit deployment notes
 
 The registration and login endpoints use atomic Redis counters shared by all API
-replicas. Raw email addresses and client IP addresses are hashed before they are
-used in Redis keys.
+replicas. Raw email addresses and client IP addresses are transformed with keyed HMAC-SHA256
+before they are used in Redis keys. The HMAC key is read from `AUTH_RATE_LIMIT_KEY`
+when configured, otherwise from the existing `JWT_SECRET_KEY`; it must be at
+least 32 characters. Keep either secret private and stable across API replicas.
 
 ## Defaults
 
@@ -37,7 +39,8 @@ python -m pytest -q tests/test_auth_rate_limit.py tests/test_auth_api.py
 
 The unit tests verify IP and email thresholds, normalized email matching,
 hashed Redis key identifiers, explicit local-test disablement, and fail-closed
-behavior when Redis is missing. They use a fake Redis implementation; they do
+behavior when Redis is missing. Redis identifiers use keyed digests and are
+never stored as raw email addresses or IPs. The tests use a fake Redis implementation; they do
 not replace a staging test against the actual deployment Redis service.
 
 ## Scope and remaining work
