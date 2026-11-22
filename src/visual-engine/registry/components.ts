@@ -1,13 +1,9 @@
 import { createAmbientFlowEffect } from "../effects/AmbientFlow";
+import { createCanvasAuroraEffect } from "../effects/CanvasAurora";
 import type { VisualComponentDefinition } from "./types";
-
 export const visualComponents: VisualComponentDefinition[] = [
   {
-    id: "ambient-flow",
-    name: "Ambient Flow",
-    category: "Backgrounds",
-    description: "Procedural gradient field with gentle motion and pointer response.",
-    version: 1,
+    id: "ambient-flow", name: "Ambient Flow", category: "Backgrounds", description: "Procedural gradient field with gentle motion and pointer response.", version: 1, renderer: "webgl2",
     tags: ["webgl", "procedural", "gradient", "ambient"],
     controls: [
       { type: "range", key: "motion", label: "Motion", min: 0, max: 1, step: 0.05, defaultValue: 0.55 },
@@ -19,14 +15,11 @@ export const visualComponents: VisualComponentDefinition[] = [
       { id: "balanced", name: "Balanced", description: "The default ambient appearance.", values: { motion: 0.55, intensity: 0.8, pointerResponse: true } },
       { id: "dynamic", name: "Dynamic", description: "More movement and stronger color contrast.", values: { motion: 0.9, intensity: 1, pointerResponse: true } },
     ],
-    createEffect: (values) => createAmbientFlowEffect({
-      motion: typeof values.motion === "number" ? values.motion : 0.55,
-      intensity: typeof values.intensity === "number" ? values.intensity : 0.8,
-      pointerResponse: typeof values.pointerResponse === "boolean" ? values.pointerResponse : true,
-    }),
+    createEffect: (values) => createAmbientFlowEffect({ motion: typeof values.motion === "number" ? values.motion : 0.55, intensity: typeof values.intensity === "number" ? values.intensity : 0.8, pointerResponse: typeof values.pointerResponse === "boolean" ? values.pointerResponse : true }),
+  },
+  {
+    id: "canvas-aurora", name: "Canvas Aurora", category: "Backgrounds", description: "Soft layered color fields rendered with the native Canvas 2D API.", version: 1, renderer: "canvas2d",
+    tags: ["canvas2d", "aurora", "gradient", "lightweight"], controls: [], presets: [], createEffect: () => createCanvasAuroraEffect(),
   },
 ];
-
-export function getVisualComponent(id: string): VisualComponentDefinition | undefined {
-  return visualComponents.find((component) => component.id === id);
-}
+export function getVisualComponent(id: string): VisualComponentDefinition | undefined { return visualComponents.find((component) => component.id === id); }
