@@ -1,4 +1,6 @@
 import asyncio
+import sys
+from types import ModuleType
 
 from backend.workers.redis_worker import _consume_analysis_stream
 
@@ -22,8 +24,6 @@ class FakeStreamingResponse:
 
 
 def test_worker_invokes_analysis_pipeline_without_http_request(monkeypatch):
-    import backend.routers.analyze as analyze_router
-
     async def fake_analyze_video(payload, http_request):
         assert payload is marker
         assert http_request is None
@@ -31,7 +31,9 @@ def test_worker_invokes_analysis_pipeline_without_http_request(monkeypatch):
 
     marker = object()
     queue = FakeQueue()
-    monkeypatch.setattr(analyze_router, "analyze_video", fake_analyze_video)
+    fake_module = ModuleType("backend.routers.analyze")
+    fake_module.analyze_video = fake_analyze_video
+    monkeypatch.setitem(sys.modules, "backend.routers.analyze", fake_module)
 
     result = asyncio.run(_consume_analysis_stream(marker, queue, "job-123"))
 
