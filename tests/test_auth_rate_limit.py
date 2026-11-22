@@ -47,6 +47,7 @@ def test_auth_limits_enforce_ip_threshold():
             ip_limit=8,
             identity_limit=20,
             window_seconds=900,
+            key_secret="unit-test-secret-that-is-at-least-32-chars",
         ) is None
 
     assert consume_auth_limits(
@@ -57,6 +58,7 @@ def test_auth_limits_enforce_ip_threshold():
         ip_limit=8,
         identity_limit=20,
         window_seconds=900,
+        key_secret="unit-test-secret-that-is-at-least-32-chars",
     ) == 900
 
 
@@ -81,6 +83,7 @@ def test_auth_limits_enforce_identity_threshold_across_ips():
         ip_limit=100,
         identity_limit=2,
         window_seconds=900,
+        key_secret="unit-test-secret-that-is-at-least-32-chars",
     ) == 900
 
 
