@@ -200,7 +200,7 @@ def test_user_rate_limit_can_be_disabled_for_local_tests(monkeypatch):
 
 
 def test_railway_client_ip_uses_only_x_real_ip_for_matching_public_host(monkeypatch):
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
     monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
     request = _request()
     request.scope["headers"] = [(b"host", b"testserver"), (b"x-real-ip", b"198.51.100.42")]
@@ -208,7 +208,7 @@ def test_railway_client_ip_uses_only_x_real_ip_for_matching_public_host(monkeypa
 
 
 def test_railway_client_ip_does_not_trust_forwarded_for(monkeypatch):
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
     monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
     request = _request()
     request.scope["headers"] = [(b"host", b"testserver"), (b"x-forwarded-for", b"198.51.100.42")]
@@ -218,7 +218,7 @@ def test_railway_client_ip_does_not_trust_forwarded_for(monkeypatch):
 
 
 def test_railway_client_ip_rejects_wrong_host_and_invalid_ip(monkeypatch):
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
     monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "public.example")
     with pytest.raises(HTTPException):
         resolve_client_ip(_request())
@@ -231,7 +231,7 @@ def test_railway_client_ip_rejects_wrong_host_and_invalid_ip(monkeypatch):
 
 
 def test_local_client_ip_uses_direct_peer_not_forwarded_header(monkeypatch):
-    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT_NAME", raising=False)
     request = _request()
     request.scope["headers"] = [(b"host", b"testserver"), (b"x-forwarded-for", b"198.51.100.42")]
     assert resolve_client_ip(request) == "203.0.113.10"
@@ -265,7 +265,7 @@ def test_ip_quota_rejects_unknown_actions():
 
 
 def test_ip_rate_limit_fails_closed_without_railway_edge_identity(monkeypatch):
-    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "production")
     monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
     monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "true")
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
