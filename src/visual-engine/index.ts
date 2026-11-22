@@ -9,4 +9,5 @@ export { createParticleFieldEffect } from "./effects/ParticleField";
 export { VisualControlPanel } from "./controls/VisualControlPanel";
 export { VisualWorkbench } from "./controls/VisualWorkbench";
 export { VisualGallery } from "./controls/VisualGallery";
-export { visualComponents, getVisualComponent, getDefaultValues, validateVisualValues } from "./registry";
+export { visualComponents, getVisualComponent, getDefaultValues, validateVisualValues, createVisualConfiguration, exportVisualConfiguration, importVisualConfiguration, resetVisualConfiguration } from "./registry";
+export type { VisualConfiguration } from "./registry";
