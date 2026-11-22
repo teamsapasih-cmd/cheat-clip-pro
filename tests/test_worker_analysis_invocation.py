@@ -13,8 +13,8 @@ class FakeQueue:
 
 class FakeStreamingResponse:
     async def _body(self):
-        yield b'data: {"overall_progress": 40, "stage": "Processing"}\\n\\n'
-        yield b'data: {"done": true, "result": {"summary": "ok", "clips": []}}\\n\\n'
+        yield b'data: {"overall_progress": 40, "stage": "Processing"}\n\n'
+        yield b'data: {"done": true, "result": {"summary": "ok", "clips": []}}\n\n'
 
     @property
     def body_iterator(self):
