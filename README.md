@@ -16,7 +16,7 @@ Make sure you have the following installed:
    * **Windows:** `winget install Git.Git` or download from [git-scm.com](https://git-scm.com/)
    * **macOS:** `brew install git`
    * **Linux:** `sudo apt install git`
-2. **[Node.js](https://nodejs.org/)** (v18 or newer)
+2. **[Node.js](https://nodejs.org/)** (v22 LTS recommended)
    * Download from [nodejs.org](https://nodejs.org/) or install via your package manager.
 3. **[Python](https://www.python.org/)** (v3.10 – v3.12 recommended; **Python < 3.13 required**)
    * ⚠️ **Important:** Dependencies like **PyTorch**, **OpenCV**, and **Whisper** do **not** support Python 3.13, 3.14, or 3.15+ yet. You must use **Python 3.10, 3.11 (recommended), or 3.12**.
@@ -48,7 +48,7 @@ Make sure you have the following installed:
 Open your terminal and clone the repository:
 
 ```bash
-git clone https://github.com/galihjuansaputra/cheat-clip-pro.git
+git clone https://github.com/teamsapasih-cmd/cheat-clip-pro.git
 cd cheat-clip-pro
 ```
 
@@ -107,15 +107,20 @@ pip install -r backend/requirements.txt
 
 ---
 
-## 🔑 Free Google Gemini API Key (Takes 1 Minute)
+## 🔑 Optional AI configuration
 
-Cheat Clip PRO uses Google's AI to find the best viral moments for free:
-1. Go to **[Google AI Studio](https://aistudio.google.com/)** and sign in with any Google account.
-2. Click **"Get API key"** (or **"Create API key"**).
-3. Copy your key (starts with `AIzaSy...`).
-4. Paste it into the **Gemini API Key** field in the app.
+The local editor and rendering tools run on your computer; no hosting account is required.
 
-> 💡 **Tip:** You can also type `mock` in the API Key box to test out the app with sample data without an API key!
+AI video analysis uses a server-side provider key. To enable it locally:
+
+1. Copy `local.env.example` to `.env` in the repository root.
+2. Add your own `GEMINI_API_KEY` to that local `.env` file.
+3. Keep the key out of source files, screenshots, Git commits, and browser code.
+4. Restart the backend after changing environment variables.
+
+Without an AI key, the application can still be opened and the local interface/editor explored, but AI analysis will not run. AI analysis requires an internet connection and a configured provider.
+
+The Cloud Workspace is a separate cloud feature. It requires PostgreSQL, Redis, and private S3-compatible object storage; it is not needed to develop or use the local editor.
 
 ---
 
@@ -159,9 +164,9 @@ Cheat Clip PRO uses Google's AI to find the best viral moments for free:
   ```
   Restart the backend after installation. The app automatically prefers Homebrew's subtitle-capable `ffmpeg-full` binary.
 
-### 3. "Sign in to confirm you're not a bot"
-* **Cause:** YouTube blocks video downloads if too many requests are sent without logging in.
-* **Fix:** Click the 🍪 **Cookies** button in the top navigation bar, export your YouTube cookies using a free browser extension (like *Get cookies.txt locally*), and paste them into the app.
+### 3. A video URL cannot be retrieved
+* **Cause:** A video platform may restrict automated access or require permissions that the application does not have.
+* **Fix:** Use the application's local upload option with a video you own or have permission to process. Do not attempt to bypass platform access controls.
 
 ### 4. Does this work on AMD graphics cards and Mac?
 * **Yes!** Cheat Clip PRO automatically supports:
