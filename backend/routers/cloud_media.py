@@ -20,6 +20,7 @@ from backend.cloud.factory import build_object_storage
 from backend.database.dependencies import get_db_session
 from backend.database.models import MediaAsset, Project, User
 from backend.routers.auth import get_current_user
+from backend.cloud.rate_limit import enforce_user_rate_limit
 
 router = APIRouter(prefix="/api/media/cloud", tags=["Cloud Media"])
 
@@ -51,6 +52,7 @@ def create_upload_intent(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
+    enforce_user_rate_limit(action="media.upload_intent", user_id=user.id, limit=10, window_seconds=900)
     project = db.scalar(
         select(Project).where(Project.id == body.project_id, Project.owner_id == user.id)
     )
