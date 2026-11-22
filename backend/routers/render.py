@@ -115,6 +115,7 @@ async def start_batch_render(
             })
         RENDER_BATCHES[batch_id] = {
             "batch_id": batch_id,
+            "owner_id": owner_id,
             "total_clips": len(request.clips),
             "current_clip_index": 0,
             "overall_status": "running",
