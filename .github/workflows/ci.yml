@@ -6,10 +6,12 @@ on:
       - master
       - clip-intelligence-upgrade
       - cloud-worker-invocation-fix
+      - local-development-without-hosting
   pull_request:
     branches:
       - master
       - clip-intelligence-upgrade
+      - cloud-worker-invocation-fix
 
 permissions:
   contents: read
@@ -34,6 +36,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate local development launcher
+        run: node --check scripts/dev.js
 
       - name: Build frontend
         run: npm run build
