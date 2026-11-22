@@ -125,8 +125,12 @@ class FakeObjectStorage:
         self.expected_size = 0
         self.expected_type = ""
 
-    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
+    def create_upload_url(
+        self, key: str, content_type: str, expires_seconds: int = 300,
+        expected_size_bytes: int | None = None,
+    ) -> str:
         self.expected_type = content_type
+        self.expected_size = expected_size_bytes
         return "https://storage.example.test/signed-upload"
 
     def get_metadata(self, key: str) -> dict[str, object]:
@@ -173,6 +177,8 @@ def test_cloud_upload_requires_owned_project_and_verifies_object(client: TestCli
     assert intent.status_code == 201, intent.text
     assert intent.json()["method"] == "PUT"
     assert intent.json()["required_headers"]["Content-Type"] == "video/mp4"
+    assert intent.json()["max_size_bytes"] == 1024
+    assert storage.expected_size == 1024
     assert intent.json()["media_asset_id"]
 
     storage.expected_size = 1024
