@@ -67,12 +67,21 @@ process.on('exit', () => shutdown(0));
 function runService(name, command, args, color) {
   const prefix = formatPrefix(name, color);
 
+  const serviceEnv = { ...process.env, FORCE_COLOR: '1' };
+
+  // The local API binds to loopback by default. Keep the legacy local workflow
+  // usable without Redis; cloud deployments must explicitly enable distributed
+  // rate limiting and provide Redis. An explicit operator setting is preserved.
+  if (name === 'backend' && !serviceEnv.AUTH_RATE_LIMIT_ENABLED?.trim()) {
+    serviceEnv.AUTH_RATE_LIMIT_ENABLED = 'false';
+  }
+
   const proc = spawn(command, args, {
     cwd: rootDir,
     shell: false,
     detached: !isWindows,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, FORCE_COLOR: '1' }
+    env: serviceEnv
   });
 
   children.push(proc);

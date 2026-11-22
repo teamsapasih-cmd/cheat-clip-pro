@@ -241,13 +241,17 @@ async function start() {
   const baseArgs = selectedCandidate.args;
   const backendEnv = getSanitizedEnv(pythonExe);
 
+  // Keep local development private to this computer by default. Set HOST
+  // explicitly only when LAN access is intentionally required. Production
+  // containers use the Dockerfile's separate 0.0.0.0 command.
+  const backendHost = process.env.HOST?.trim() || '127.0.0.1';
   const uvicornArgs = [
     ...baseArgs,
     '-m',
     'uvicorn',
     'backend.main:app',
     '--host',
-    '0.0.0.0',
+    backendHost,
     '--port',
     '8000',
     '--reload',
@@ -255,7 +259,7 @@ async function start() {
     path.join(rootDir, 'backend')
   ];
 
-  console.log('\x1b[34m%s\x1b[0m', `🚀 Launching FastAPI server on http://127.0.0.1:8000 ...`);
+  console.log('\x1b[34m%s\x1b[0m', `🚀 Launching FastAPI server on http://${backendHost}:8000 ...`);
 
   const backendProc = spawn(pythonExe, uvicornArgs, {
     cwd: rootDir,
