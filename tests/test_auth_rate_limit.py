@@ -4,7 +4,11 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from backend.cloud.rate_limit import consume_auth_limits, enforce_auth_rate_limit
+from backend.cloud.rate_limit import (
+    consume_auth_limits,
+    consume_user_limit,
+    enforce_auth_rate_limit,
+)
 
 
 class FakeRedis:
@@ -13,6 +17,11 @@ class FakeRedis:
         self.keys: list[str] = []
 
     def eval(self, script, number_of_keys, *args):
+        if number_of_keys == 1:
+            key, window = args
+            self.keys.append(key)
+            self.counts[key] = self.counts.get(key, 0) + 1
+            return [self.counts[key], int(window)]
         assert number_of_keys == 2
         ip_key, identity_key, window = args
         self.keys.extend([ip_key, identity_key])
@@ -127,3 +136,31 @@ def test_auth_rate_limit_can_be_disabled_explicitly_for_local_tests(monkeypatch)
     monkeypatch.delenv("REDIS_URL", raising=False)
     monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "false")
     enforce_auth_rate_limit(_request(), action="login", identity="person@example.com")
+
+
+
+def test_user_quota_is_atomic_and_hashed():
+    redis = FakeRedis()
+    kwargs = {
+        "action": "analysis.enqueue",
+        "user_id": "private-user-id",
+        "limit": 2,
+        "window_seconds": 900,
+        "key_secret": "unit-test-secret-that-is-at-least-32-chars",
+    }
+    assert consume_user_limit(redis, **kwargs) is None
+    assert consume_user_limit(redis, **kwargs) is None
+    assert consume_user_limit(redis, **kwargs) == 900
+    assert all("private-user-id" not in key for key in redis.keys)
+
+
+def test_user_quota_rejects_unknown_actions():
+    with pytest.raises(ValueError):
+        consume_user_limit(
+            FakeRedis(),
+            action="unknown",
+            user_id="user-1",
+            limit=1,
+            window_seconds=60,
+            key_secret="unit-test-secret-that-is-at-least-32-chars",
+        )
