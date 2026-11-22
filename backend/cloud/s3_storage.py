@@ -73,18 +73,29 @@ class S3ObjectStorage:
             content_type=head.get("ContentType", content_type),
         )
 
-    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
+    def create_upload_url(
+        self, key: str, content_type: str, expires_seconds: int = 300,
+        expected_size_bytes: int | None = None,
+    ) -> str:
         if not key or key.startswith("/") or ".." in key.split("/"):
             raise ValueError("Storage key must be a safe relative object key")
         if not 1 <= expires_seconds <= 900:
             raise ValueError("Signed upload URL expiry must be between 1 and 900 seconds")
+        if expected_size_bytes is not None and expected_size_bytes <= 0:
+            raise ValueError("Expected upload size must be a positive number of bytes")
+        params = {
+            "Bucket": self.bucket,
+            "Key": key,
+            "ContentType": content_type or "application/octet-stream",
+        }
+        # ContentLength is included in the SigV4 canonical request. Browsers set
+        # the actual Content-Length automatically for File PUT requests, so a
+        # different-sized body cannot reuse this URL successfully.
+        if expected_size_bytes is not None:
+            params["ContentLength"] = expected_size_bytes
         return self.client.generate_presigned_url(
             "put_object",
-            Params={
-                "Bucket": self.bucket,
-                "Key": key,
-                "ContentType": content_type or "application/octet-stream",
-            },
+            Params=params,
             ExpiresIn=expires_seconds,
         )
 
