@@ -114,3 +114,77 @@ def test_export_without_expiry_is_not_deleted():
     assert storage.deleted == []
     assert export.storage_deleted_at is None
     db.close()
+
+
+def test_abandoned_and_rejected_cloud_upload_objects_are_cleaned():
+    db = make_db()
+    now = datetime.now(timezone.utc)
+    user = User(email="pending-upload-retention@example.com")
+    db.add(user); db.flush()
+    project = Project(owner_id=user.id, name="Pending uploads")
+    db.add(project); db.flush()
+    abandoned = MediaAsset(
+        owner_id=user.id, project_id=project.id, original_filename="abandoned.mp4",
+        storage_key="users/u/abandoned.mp4", status="pending_upload",
+        created_at=now - timedelta(hours=1),
+    )
+    rejected = MediaAsset(
+        owner_id=user.id, project_id=project.id, original_filename="rejected.mp4",
+        storage_key="users/u/rejected.mp4", status="upload_rejected",
+        created_at=now,
+    )
+    recent = MediaAsset(
+        owner_id=user.id, project_id=project.id, original_filename="recent.mp4",
+        storage_key="users/u/recent.mp4", status="pending_upload",
+        created_at=now - timedelta(minutes=1),
+    )
+    db.add_all([abandoned, rejected, recent]); db.commit()
+    storage = FakeStorage()
+
+    result = run_retention_sweep(db, storage, now=now)
+
+    assert result["pending_uploads_deleted"] == 1
+    assert result["rejected_uploads_deleted"] == 1
+    assert set(storage.deleted) == {"users/u/abandoned.mp4", "users/u/rejected.mp4"}
+    db.refresh(abandoned); db.refresh(rejected); db.refresh(recent)
+    assert abandoned.status == "expired" and abandoned.storage_key is None
+    assert rejected.status == "expired" and rejected.storage_key is None
+    assert recent.status == "pending_upload" and recent.storage_key is not None
+    db.close()
+
+
+def test_failed_pending_upload_object_deletion_is_retried():
+    class FailOnceStorage(FakeStorage):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+        def delete(self, key):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("temporary storage error")
+            super().delete(key)
+
+    db = make_db()
+    now = datetime.now(timezone.utc)
+    user = User(email="pending-upload-retry@example.com")
+    db.add(user); db.flush()
+    project = Project(owner_id=user.id, name="Retry")
+    db.add(project); db.flush()
+    asset = MediaAsset(
+        owner_id=user.id, project_id=project.id, original_filename="abandoned.mp4",
+        storage_key="users/u/retry.mp4", status="pending_upload",
+        created_at=now - timedelta(hours=1),
+    )
+    db.add(asset); db.commit()
+    storage = FailOnceStorage()
+
+    first = run_retention_sweep(db, storage, now=now)
+    db.refresh(asset)
+    assert first["failed"] == 1
+    assert asset.status == "pending_upload" and asset.storage_key is not None
+
+    second = run_retention_sweep(db, storage, now=now)
+    db.refresh(asset)
+    assert second["pending_uploads_deleted"] == 1
+    assert asset.status == "expired" and asset.storage_key is None
+    db.close()
