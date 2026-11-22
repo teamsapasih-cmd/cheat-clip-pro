@@ -92,7 +92,7 @@ def enforce_auth_rate_limit(request: Request, *, action: str, identity: str) -> 
     if action not in limits:
         raise ValueError("Unsupported authentication rate-limit action")
     ip_limit, identity_limit, window_seconds = limits[action]
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = resolve_client_ip(request)
 
     try:
         client = Redis.from_url(
