@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { VisualSurface, createCanvasAuroraEffect } from "../../src/visual-engine";
+import "../../src/visual-engine/controls/visual-workbench.css";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -10,6 +11,7 @@ createRoot(document.getElementById("root")!).render(
         <VisualSurface
           renderer="canvas2d"
           effect={createCanvasAuroraEffect()}
+          className="visual-workbench-canvas"
           label="Canvas Aurora cross-browser preview"
         />
       </div>
