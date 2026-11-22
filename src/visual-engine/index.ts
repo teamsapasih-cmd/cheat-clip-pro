@@ -5,6 +5,7 @@ export { createProgram, createShader } from "./shaders";
 export type { Canvas2DEffectFactory, Canvas2DEffectInstance, Canvas2DFrame, VisualEffectFactory, VisualEffectInstance, VisualFrame, VisualRenderer, VisualRuntimeOptions } from "./types";
 export { createAmbientFlowEffect } from "./effects/AmbientFlow";
 export { createCanvasAuroraEffect } from "./effects/CanvasAurora";
+export { createParticleFieldEffect } from "./effects/ParticleField";
 export { VisualControlPanel } from "./controls/VisualControlPanel";
 export { VisualWorkbench } from "./controls/VisualWorkbench";
 export { VisualGallery } from "./controls/VisualGallery";
