@@ -43,8 +43,11 @@ class ObjectStorage(Protocol):
         """Delete an object after authorization and retention checks."""
         ...
 
-    def create_upload_url(self, key: str, content_type: str, expires_seconds: int = 300) -> str:
-        """Create a short-lived signed URL for a direct client upload."""
+    def create_upload_url(
+        self, key: str, content_type: str, expires_seconds: int = 300,
+        expected_size_bytes: int | None = None,
+    ) -> str:
+        """Create a short-lived upload URL bound to the declared object size."""
         ...
 
 
