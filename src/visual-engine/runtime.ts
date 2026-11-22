@@ -139,7 +139,8 @@ export function mountVisualRuntime(
     canvas.removeEventListener("webglcontextrestored", onContextRestored);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     reducedMotion?.removeEventListener("change", onReducedMotionChange);
-    effect?.dispose?.();
+    const failedEffect = effect as ReturnType<VisualEffectFactory> | null;
+    failedEffect?.dispose?.();
     throw error;
   }
 
