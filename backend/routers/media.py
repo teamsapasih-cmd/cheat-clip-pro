@@ -454,7 +454,7 @@ def get_video_file(file_name: str, request: Request):
 
 
 @router.post("/api/upload-bgm")
-async def upload_bgm(file: UploadFile = File(...), request: Request = None):
+async def upload_bgm(request: Request, file: UploadFile = File(...)):
     enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -495,7 +495,7 @@ def get_audio_file(file_name: str):
 
 
 @router.post("/api/upload-sfx")
-async def upload_hook_sfx(file: UploadFile = File(...), request: Request = None):
+async def upload_hook_sfx(request: Request, file: UploadFile = File(...)):
     enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -526,7 +526,7 @@ async def upload_hook_sfx(file: UploadFile = File(...), request: Request = None)
 
 
 @router.post("/api/upload-watermark")
-async def upload_watermark(file: UploadFile = File(...), request: Request = None):
+async def upload_watermark(request: Request, file: UploadFile = File(...)):
     enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -653,7 +653,7 @@ async def detect_face(
 
 
 @router.post("/api/upload-font")
-async def upload_font(file: UploadFile = File(...), request: Request = None):
+async def upload_font(request: Request, file: UploadFile = File(...)):
     enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     """
     Handles custom font file uploads (.ttf, .otf, .woff, .woff2).
