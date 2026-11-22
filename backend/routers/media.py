@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, Response, Upl
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.utils.text import canonical_video_url
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.config import (
     EXPORTS_DIR,
     TEMP_DIR,
@@ -90,6 +91,7 @@ async def _save_uploaded_file_chunked(file: UploadFile, save_path: Path, max_byt
 
 @router.post("/api/upload-video")
 async def upload_video(
+    request: Request,
     file: UploadFile = File(...),
     client_duration: Optional[float] = Form(None),
     client_width: Optional[int] = Form(None),
@@ -100,6 +102,7 @@ async def upload_video(
     Handles local video or browser-extracted audio uploads (.mp4, .mov, .mkv, .webm, .avi, .wav, .mp3, etc.).
     Extracts metadata and saves to uploads folder.
     """
+    enforce_ip_rate_limit(request, action="legacy.upload_video", limit=8, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     
@@ -178,7 +181,8 @@ def _transcribe_uploaded_audio_segment(source_path: Path, start_time: float, end
 
 
 @router.post("/api/transcribe-clip-words")
-async def transcribe_uploaded_clip_words(body: ClipWordTranscriptionRequest):
+async def transcribe_uploaded_clip_words(body: ClipWordTranscriptionRequest, request: Request):
+    enforce_ip_rate_limit(request, action="legacy.transcribe", limit=20, window_seconds=900)
     """Return word timestamps from an uploaded source's audio, never from Supadata."""
     if body.start_time < 0 or body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="Invalid clip time range.")
@@ -450,7 +454,8 @@ def get_video_file(file_name: str, request: Request):
 
 
 @router.post("/api/upload-bgm")
-async def upload_bgm(file: UploadFile = File(...)):
+async def upload_bgm(file: UploadFile = File(...), request: Request = None):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -490,7 +495,8 @@ def get_audio_file(file_name: str):
 
 
 @router.post("/api/upload-sfx")
-async def upload_hook_sfx(file: UploadFile = File(...)):
+async def upload_hook_sfx(file: UploadFile = File(...), request: Request = None):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -520,7 +526,8 @@ async def upload_hook_sfx(file: UploadFile = File(...)):
 
 
 @router.post("/api/upload-watermark")
-async def upload_watermark(file: UploadFile = File(...)):
+async def upload_watermark(file: UploadFile = File(...), request: Request = None):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
     ext = os.path.splitext(file.filename)[1].lower()
@@ -646,7 +653,8 @@ async def detect_face(
 
 
 @router.post("/api/upload-font")
-async def upload_font(file: UploadFile = File(...)):
+async def upload_font(file: UploadFile = File(...), request: Request = None):
+    enforce_ip_rate_limit(request, action="legacy.upload_asset", limit=30, window_seconds=900)
     """
     Handles custom font file uploads (.ttf, .otf, .woff, .woff2).
     Saves to fonts directory so preview and libass / ffmpeg can immediately render with it.
