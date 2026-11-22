@@ -145,7 +145,7 @@ def persist_legacy_batch_exports(
                     "id": item.id,
                     "filename": item.filename,
                     "size_bytes": item.size_bytes,
-                    "expires_at": item.expires_at.isoformat() if item.expires_at else None,
+                    "expires_at": _utc_iso(item.expires_at),
                     "download_url": storage.create_download_url(item.storage_key, expires_seconds=300),
                 }
                 for item in records
