@@ -16,7 +16,7 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 ## Current components
 
 1. **Ambient Flow** — procedural WebGL2 gradient field with motion, intensity, and pointer-response controls plus three presets.
-2. **Canvas Aurora** — layered Canvas 2D color field with pointer-responsive movement.
+2. **Canvas Aurora** — layered Canvas 2D color field with motion, intensity, and pointer-response controls plus three presets.
 3. **Particle Field** — procedural WebGL2 particle field with motion, intensity, and size controls plus three presets.
 4. **Portable configurations** — versioned JSON export/import with component validation and safe defaults; no browser or media storage is used.
 
