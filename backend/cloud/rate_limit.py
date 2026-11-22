@@ -136,7 +136,7 @@ def resolve_client_ip(request: Request) -> str:
     configured public domain. Never trust X-Forwarded-For. Outside Railway,
     use the direct ASGI peer address for local/test deployments.
     """
-    railway_environment = os.environ.get("RAILWAY_ENVIRONMENT", "").strip()
+    railway_environment = os.environ.get("RAILWAY_ENVIRONMENT_NAME", "").strip()
     if railway_environment:
         public_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip().lower()
         request_host = (request.url.hostname or "").strip().lower()
