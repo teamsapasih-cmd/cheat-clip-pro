@@ -37,16 +37,19 @@ jobs:
         run: npm run build
 
       - name: Lint frontend modules
-        run: npx eslint src/services/workspaceApi.ts src/components/CloudWorkspacePanel.tsx src/visual-engine
+        run: npx eslint src/services/workspaceApi.ts src/components/CloudWorkspacePanel.tsx src/visual-engine tests/visual-engine-browser
 
       - name: Install browser test runner
         run: npm install --no-save --package-lock=false @playwright/test@1.56.1
 
-      - name: Install Chromium for browser tests
-        run: npx playwright install --with-deps chromium
+      - name: Install browsers for cross-browser tests
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Test visual engine in Chromium (desktop and mobile)
-        run: npx playwright test
+        run: npx playwright test --project=chromium-desktop --project=chromium-mobile
+
+      - name: Test Canvas 2D compatibility in Firefox and WebKit
+        run: npx playwright test --project=firefox-canvas2d --project=webkit-canvas2d
 
   backend-tests:
     name: Backend syntax and cloud foundation tests
