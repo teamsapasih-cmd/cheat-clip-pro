@@ -5,4 +5,9 @@ export interface Canvas2DFrame { ctx: CanvasRenderingContext2D; time: number; de
 export interface Canvas2DEffectInstance { render(frame: Canvas2DFrame): void; resize?(width: number, height: number, pixelRatio: number): void; dispose?(): void; }
 export type Canvas2DEffectFactory = (ctx: CanvasRenderingContext2D, size: { width: number; height: number; pixelRatio: number }) => Canvas2DEffectInstance;
 export type VisualRenderer = "webgl2" | "canvas2d";
-export interface VisualRuntimeOptions { maxPixelRatio?: number; pauseWhenHidden?: boolean; respectReducedMotion?: boolean; }
+export interface VisualRuntimeOptions {
+  maxPixelRatio?: number;
+  pauseWhenHidden?: boolean;
+  respectReducedMotion?: boolean;
+  onError?: (error: unknown) => void;
+}
