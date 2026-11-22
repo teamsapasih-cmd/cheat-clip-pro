@@ -9,6 +9,9 @@ from backend.cloud.rate_limit import (
     consume_user_limit,
     enforce_auth_rate_limit,
     enforce_user_rate_limit,
+    consume_ip_limit,
+    resolve_client_ip,
+    enforce_ip_rate_limit,
 )
 
 
@@ -193,3 +196,81 @@ def test_user_rate_limit_can_be_disabled_for_local_tests(monkeypatch):
         limit=3,
         window_seconds=900,
     )
+
+
+
+def test_railway_client_ip_uses_only_x_real_ip_for_matching_public_host(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
+    request = _request()
+    request.scope["headers"] = [(b"host", b"testserver"), (b"x-real-ip", b"198.51.100.42")]
+    assert resolve_client_ip(request) == "198.51.100.42"
+
+
+def test_railway_client_ip_does_not_trust_forwarded_for(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
+    request = _request()
+    request.scope["headers"] = [(b"host", b"testserver"), (b"x-forwarded-for", b"198.51.100.42")]
+    with pytest.raises(HTTPException) as error:
+        resolve_client_ip(request)
+    assert error.value.status_code == 503
+
+
+def test_railway_client_ip_rejects_wrong_host_and_invalid_ip(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "public.example")
+    with pytest.raises(HTTPException):
+        resolve_client_ip(_request())
+
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
+    request = _request()
+    request.scope["headers"] = [(b"host", b"testserver"), (b"x-real-ip", b"not-an-ip")]
+    with pytest.raises(HTTPException):
+        resolve_client_ip(request)
+
+
+def test_local_client_ip_uses_direct_peer_not_forwarded_header(monkeypatch):
+    monkeypatch.delenv("RAILWAY_ENVIRONMENT", raising=False)
+    request = _request()
+    request.scope["headers"] = [(b"host", b"testserver"), (b"x-forwarded-for", b"198.51.100.42")]
+    assert resolve_client_ip(request) == "203.0.113.10"
+
+
+def test_ip_quota_is_atomic_hashed_and_action_scoped():
+    redis = FakeRedis()
+    kwargs = {
+        "action": "legacy.analyze",
+        "client_ip": "198.51.100.42",
+        "limit": 2,
+        "window_seconds": 900,
+        "key_secret": "unit-test-secret-that-is-at-least-32-chars",
+    }
+    assert consume_ip_limit(redis, **kwargs) is None
+    assert consume_ip_limit(redis, **kwargs) is None
+    assert consume_ip_limit(redis, **kwargs) == 900
+    assert all("198.51.100.42" not in key for key in redis.keys)
+
+
+def test_ip_quota_rejects_unknown_actions():
+    with pytest.raises(ValueError):
+        consume_ip_limit(
+            FakeRedis(),
+            action="unknown",
+            client_ip="198.51.100.42",
+            limit=1,
+            window_seconds=60,
+            key_secret="unit-test-secret-that-is-at-least-32-chars",
+        )
+
+
+def test_ip_rate_limit_fails_closed_without_railway_edge_identity(monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("RAILWAY_PUBLIC_DOMAIN", "testserver")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "true")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("JWT_SECRET_KEY", "unit-test-secret-that-is-at-least-32-chars")
+    request = _request()
+    with pytest.raises(HTTPException) as error:
+        enforce_ip_rate_limit(request, action="legacy.analyze", limit=5)
+    assert error.value.status_code == 503
