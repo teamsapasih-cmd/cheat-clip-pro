@@ -101,7 +101,7 @@ def enforce_auth_rate_limit(request: Request, *, action: str, identity: str) -> 
             )
         finally:
             client.close()
-    except RedisError as exc:
+    except (RedisError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication protection is temporarily unavailable",
