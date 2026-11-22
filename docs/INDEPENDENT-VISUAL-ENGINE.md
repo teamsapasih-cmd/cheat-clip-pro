@@ -39,3 +39,15 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 ## Integration policy
 
 The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The workbench is exported as a module and is not mounted into the production app. No Railway deployment is made until build, lint, and browser/GPU checks pass.
+
+
+## Browser validation
+
+The isolated browser harness lives in `tests/visual-engine-browser/` and runs against Vite without mounting the workbench into the production application. GitHub Actions installs Playwright and Chromium at job time (without adding runtime dependencies or changing the application lockfile), then validates:
+- WebGL2 Ambient Flow and Particle Field plus Canvas 2D Aurora rendering.
+- Search and category filtering.
+- Preset selection, range controls, reset, and JSON import/export.
+- Responsive layout at desktop and mobile emulated viewports.
+- Canvas resize behavior.
+
+CI uses Chromium's software WebGL implementation. This is useful for repeatable browser/API coverage but is not a substitute for real-device GPU, browser-vendor, thermal, or long-duration performance testing.
