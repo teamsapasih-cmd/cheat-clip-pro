@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database.dependencies import get_db_session
-from backend.database.models import Project, User
+from backend.database.models import ExportedVideo, MediaAsset, Project, RenderJob, User
 from backend.routers.auth import get_current_user
 from backend.schemas.identity import ProjectCreateRequest, ProjectResponse
 
@@ -69,5 +69,26 @@ def delete_project(
     )
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    source_object = db.scalar(
+        select(MediaAsset.id)
+        .where(MediaAsset.project_id == project.id, MediaAsset.storage_key.is_not(None))
+        .limit(1)
+    )
+    export_object = db.scalar(
+        select(ExportedVideo.id)
+        .join(RenderJob, ExportedVideo.render_job_id == RenderJob.id)
+        .where(
+            RenderJob.project_id == project.id,
+            ExportedVideo.storage_deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if source_object or export_object:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project still contains cloud media or exports. Wait until their configured retention period has expired before deleting this project.",
+        )
+
     db.delete(project)
     db.commit()
