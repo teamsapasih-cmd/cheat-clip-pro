@@ -5,6 +5,7 @@ URLs. Existing local upload routes remain unchanged until deployment is tested.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import os
 import re
 import uuid
@@ -74,11 +75,6 @@ def create_upload_intent(
     asset_id = str(uuid.uuid4())
     storage_key = f"users/{user.id}/projects/{project.id}/{asset_id}/{safe_name}"
 
-    try:
-        upload_url = storage.create_upload_url(storage_key, content_type, expires_seconds=300)
-    except Exception:
-        raise HTTPException(status_code=503, detail="Unable to create a secure upload URL")
-
     asset = MediaAsset(
         id=asset_id,
         project_id=project.id,
@@ -93,6 +89,19 @@ def create_upload_intent(
     )
     db.add(asset)
     db.commit()
+
+    try:
+        upload_url = storage.create_upload_url(
+            storage_key,
+            content_type,
+            expires_seconds=300,
+            expected_size_bytes=body.size_bytes,
+        )
+    except Exception:
+        asset.status = "upload_rejected"
+        asset.metadata_json = {"upload_url_creation_failed": True}
+        db.commit()
+        raise HTTPException(status_code=503, detail="Unable to create a secure upload URL")
 
     return {
         "media_asset_id": asset_id,
@@ -121,6 +130,16 @@ def complete_cloud_upload(
     if asset.status != "pending_upload" or not asset.storage_key:
         raise HTTPException(status_code=409, detail="Media asset is not awaiting upload")
 
+    pending_ttl_minutes = max(5, int(os.environ.get("PENDING_UPLOAD_TTL_MINUTES", "15")))
+    created_at = asset.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - created_at > timedelta(minutes=pending_ttl_minutes):
+        asset.status = "upload_rejected"
+        asset.metadata_json = {"rejection_reason": "upload_intent_expired"}
+        db.commit()
+        raise HTTPException(status_code=410, detail="Upload intent expired. Please create a new upload.")
+
     try:
         storage = build_object_storage()
         metadata = storage.get_metadata(asset.storage_key)
@@ -131,11 +150,16 @@ def complete_cloud_upload(
     expected_size = int(asset.metadata_json.get("expected_size_bytes", 0))
     actual_type = str(metadata["content_type"]).lower()
     if actual_size <= 0 or actual_size != expected_size or actual_size > _MAX_UPLOAD_BYTES:
+        asset.status = "upload_rejected"
+        asset.metadata_json = {"rejection_reason": "uploaded_size_mismatch"}
+        db.commit()
         raise HTTPException(status_code=400, detail="Uploaded file size does not match the upload request")
     if actual_type != (asset.content_type or "").lower():
+        asset.status = "upload_rejected"
+        asset.metadata_json = {"rejection_reason": "uploaded_content_type_mismatch"}
+        db.commit()
         raise HTTPException(status_code=400, detail="Uploaded file content type does not match the upload request")
 
-    from datetime import datetime, timedelta, timezone
     retention_days = max(1, int(os.environ.get("SOURCE_MEDIA_RETENTION_DAYS", "7")))
     asset.retention_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
     asset.size_bytes = actual_size
