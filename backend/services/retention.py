@@ -6,9 +6,10 @@ are deleted from private object storage according to explicit expiry timestamps.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from backend.database.models import Analysis, ExportedVideo, MediaAsset
@@ -21,16 +22,29 @@ def run_retention_sweep(db: Session, storage, *, now: datetime | None = None, li
     deleted_media = 0
     deleted_exports = 0
     failed = 0
+    pending_deleted = 0
+    rejected_deleted = 0
+    pending_ttl_minutes = max(5, int(os.environ.get("PENDING_UPLOAD_TTL_MINUTES", "15")))
+    pending_cutoff = current - timedelta(minutes=pending_ttl_minutes)
 
     media_rows = db.scalars(
         select(MediaAsset)
         .where(
-            MediaAsset.retention_expires_at.is_not(None),
-            MediaAsset.retention_expires_at <= current,
-            MediaAsset.status == "uploaded",
             MediaAsset.storage_key.is_not(None),
+            or_(
+                and_(
+                    MediaAsset.status == "uploaded",
+                    MediaAsset.retention_expires_at.is_not(None),
+                    MediaAsset.retention_expires_at <= current,
+                ),
+                and_(
+                    MediaAsset.status == "pending_upload",
+                    MediaAsset.created_at <= pending_cutoff,
+                ),
+                MediaAsset.status == "upload_rejected",
+            ),
         )
-        .order_by(MediaAsset.retention_expires_at.asc())
+        .order_by(MediaAsset.created_at.asc())
         .limit(limit)
     ).all()
     for media in media_rows:
@@ -45,12 +59,21 @@ def run_retention_sweep(db: Session, storage, *, now: datetime | None = None, li
             if active:
                 continue
             storage.delete(media.storage_key)
+            previous_status = media.status
             media.storage_key = None
             media.status = "expired"
             metadata = dict(media.metadata_json or {})
-            metadata["source_media_deleted_at"] = current.isoformat()
+            metadata["cloud_object_deleted_at"] = current.isoformat()
+            if previous_status == "pending_upload":
+                metadata["pending_upload_expired_at"] = current.isoformat()
+                pending_deleted += 1
+            elif previous_status == "upload_rejected":
+                metadata["rejected_upload_deleted_at"] = current.isoformat()
+                rejected_deleted += 1
+            else:
+                metadata["source_media_deleted_at"] = current.isoformat()
+                deleted_media += 1
             media.metadata_json = metadata
-            deleted_media += 1
         except Exception:
             failed += 1
             logger.exception("Could not delete expired source object for asset %s", media.id)
@@ -75,5 +98,11 @@ def run_retention_sweep(db: Session, storage, *, now: datetime | None = None, li
             logger.exception("Could not delete expired export object %s", export.id)
 
     db.commit()
-    return {"source_media_deleted": deleted_media, "exports_deleted": deleted_exports, "failed": failed}
+    return {
+        "source_media_deleted": deleted_media,
+        "pending_uploads_deleted": pending_deleted,
+        "rejected_uploads_deleted": rejected_deleted,
+        "exports_deleted": deleted_exports,
+        "failed": failed,
+    }
 
