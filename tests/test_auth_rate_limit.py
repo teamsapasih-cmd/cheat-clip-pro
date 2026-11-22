@@ -62,7 +62,7 @@ def test_auth_limits_enforce_ip_threshold():
     ) == 900
 
 
-def test_auth_limits_enforce_identity_threshold_across_ips():
+def test_identity_limit_is_scoped_to_ip_pair_to_avoid_cross_ip_lockout():
     redis = FakeRedis()
     for ip in ("203.0.113.10", "203.0.113.11"):
         assert consume_auth_limits(
@@ -79,14 +79,23 @@ def test_auth_limits_enforce_identity_threshold_across_ips():
     assert consume_auth_limits(
         redis,
         action="login",
-        client_ip="203.0.113.12",
+        client_ip="203.0.113.10",
         identity="PERSON@example.com",
         ip_limit=100,
         identity_limit=2,
         window_seconds=900,
         key_secret="unit-test-secret-that-is-at-least-32-chars",
+    ) is None
+    assert consume_auth_limits(
+        redis,
+        action="login",
+        client_ip="203.0.113.10",
+        identity="person@example.com",
+        ip_limit=100,
+        identity_limit=2,
+        window_seconds=900,
+        key_secret="unit-test-secret-that-is-at-least-32-chars",
     ) == 900
-
 
 def test_rate_limit_keys_do_not_store_raw_identity():
     redis = FakeRedis()
