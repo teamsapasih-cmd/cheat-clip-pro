@@ -94,3 +94,63 @@ test("canvas resizes with its preview container", async ({ page }) => {
   expect(resized.height).toBeGreaterThan(0);
   expect(resized.width !== initial.width || resized.height !== initial.height).toBeTruthy();
 });
+
+
+test("animation pauses in hidden tabs and resumes after visibility returns", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__visualDrawCalls = 0;
+    const originalDrawArrays = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+      window.__visualDrawCalls += 1;
+      return originalDrawArrays.apply(this, args);
+    };
+    window.__testVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => window.__testVisibilityState,
+    });
+  });
+  await page.goto("/tests/visual-engine-browser/");
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(3);
+
+  await page.evaluate(() => {
+    window.__testVisibilityState = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.waitForTimeout(180);
+  const pausedAt = await page.evaluate(() => window.__visualDrawCalls);
+  await page.waitForTimeout(180);
+  const stillPausedAt = await page.evaluate(() => window.__visualDrawCalls);
+  expect(stillPausedAt).toBe(pausedAt);
+
+  await page.evaluate(() => {
+    window.__testVisibilityState = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(pausedAt);
+});
+
+test("WebGL context loss and restoration reinitialize the visual effect", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__visualDrawCalls = 0;
+    const originalDrawArrays = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+      window.__visualDrawCalls += 1;
+      return originalDrawArrays.apply(this, args);
+    };
+  });
+  await page.goto("/tests/visual-engine-browser/");
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(2);
+  const supported = await page.getByRole("img", { name: "Ambient Flow visual preview" }).evaluate((canvas) => {
+    const gl = canvas.getContext("webgl2");
+    const extension = gl?.getExtension("WEBGL_lose_context");
+    if (!extension) return false;
+    extension.loseContext();
+    window.setTimeout(() => extension.restoreContext(), 150);
+    return true;
+  });
+  test.skip(!supported, "WEBGL_lose_context is not available in this Chromium runtime.");
+  const previousDrawCount = await page.evaluate(() => window.__visualDrawCalls);
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls), { timeout: 12000 }).toBeGreaterThan(previousDrawCount);
+  await expect(page.getByRole("status").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
+});
