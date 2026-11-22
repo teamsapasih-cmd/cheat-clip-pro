@@ -1,15 +1,13 @@
+import { observeCanvasResize } from "./observe-resize";
 import type { VisualEffectFactory, VisualRuntimeOptions } from "./types";
 
-const DEFAULT_OPTIONS: Required<VisualRuntimeOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<VisualRuntimeOptions, "onError">> = {
   maxPixelRatio: 1.75,
   pauseWhenHidden: true,
   respectReducedMotion: true,
 };
 
-/**
- * First-party WebGL2 runtime. It owns canvas lifecycle and delegates drawing
- * to independent effects; it has no dependency on a third-party scene engine.
- */
+/** First-party WebGL2 runtime with explicit GPU lifecycle and cleanup. */
 export function mountVisualRuntime(
   canvas: HTMLCanvasElement,
   createEffect: VisualEffectFactory,
@@ -38,6 +36,14 @@ export function mountVisualRuntime(
     ? window.matchMedia("(prefers-reduced-motion: reduce)")
     : null;
 
+  const reportError = (error: unknown) => {
+    try {
+      config.onError?.(error);
+    } catch (callbackError) {
+      console.error("[VisualRuntime] Error callback failed.", callbackError);
+    }
+  };
+
   const resize = () => {
     if (disposed) return;
     const rect = canvas.getBoundingClientRect();
@@ -62,13 +68,18 @@ export function mountVisualRuntime(
   };
 
   const render = (timestamp: number) => {
-    if (disposed) return;
-    if (config.pauseWhenHidden && document.visibilityState === "hidden") return;
+    if (disposed || (config.pauseWhenHidden && document.visibilityState === "hidden")) return;
 
     const time = timestamp / 1000;
     const delta = previousTime === 0 ? 0 : Math.min(time - previousTime, 0.05);
     previousTime = time;
-    effect?.render({ gl, time, delta, width, height, pixelRatio, pointer });
+    try {
+      effect?.render({ gl, time, delta, width, height, pixelRatio, pointer });
+    } catch (error) {
+      cancelAnimationFrame(frameId);
+      reportError(error);
+      return;
+    }
 
     if (!reducedMotion?.matches) frameId = requestAnimationFrame(render);
   };
@@ -105,12 +116,11 @@ export function mountVisualRuntime(
       previousTime = 0;
       frameId = requestAnimationFrame(render);
     } catch (error) {
-      console.error("[VisualRuntime] Context restoration failed.", error);
+      reportError(error);
     }
   };
 
-  const observer = new ResizeObserver(resize);
-  observer.observe(canvas);
+  const stopObservingResize = observeCanvasResize(canvas, resize);
   canvas.addEventListener("pointermove", onPointerMove, { passive: true });
   canvas.addEventListener("pointerleave", onPointerLeave);
   canvas.addEventListener("webglcontextlost", onContextLost);
@@ -122,20 +132,21 @@ export function mountVisualRuntime(
     initializeEffect();
     frameId = requestAnimationFrame(render);
   } catch (error) {
-    observer.disconnect();
+    stopObservingResize();
     canvas.removeEventListener("pointermove", onPointerMove);
     canvas.removeEventListener("pointerleave", onPointerLeave);
     canvas.removeEventListener("webglcontextlost", onContextLost);
     canvas.removeEventListener("webglcontextrestored", onContextRestored);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     reducedMotion?.removeEventListener("change", onReducedMotionChange);
+    effect?.dispose?.();
     throw error;
   }
 
   return () => {
     disposed = true;
     cancelAnimationFrame(frameId);
-    observer.disconnect();
+    stopObservingResize();
     canvas.removeEventListener("pointermove", onPointerMove);
     canvas.removeEventListener("pointerleave", onPointerLeave);
     canvas.removeEventListener("webglcontextlost", onContextLost);
