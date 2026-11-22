@@ -1,3 +1,4 @@
+import os
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,7 +18,16 @@ test_app.include_router(router)
 class TestClipWordTranscriptionApi(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls._previous_rate_limit = os.environ.get("AUTH_RATE_LIMIT_ENABLED")
+        os.environ["AUTH_RATE_LIMIT_ENABLED"] = "false"
         cls.client = TestClient(test_app)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls._previous_rate_limit is None:
+            os.environ.pop("AUTH_RATE_LIMIT_ENABLED", None)
+        else:
+            os.environ["AUTH_RATE_LIMIT_ENABLED"] = cls._previous_rate_limit
 
     def setUp(self):
         self.filename = f"upload_{uuid4().hex[:10]}_audio.wav"
