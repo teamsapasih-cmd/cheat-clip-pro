@@ -134,6 +134,27 @@ test("animation pauses in hidden tabs and resumes after visibility returns", asy
   await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(pausedAt);
 });
 
+test("reduced-motion preference pauses animation and resumes when disabled", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    window.__visualDrawCalls = 0;
+    const originalDrawArrays = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+      window.__visualDrawCalls += 1;
+      return originalDrawArrays.apply(this, args);
+    };
+  });
+  await page.goto("/tests/visual-engine-browser/");
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(0);
+  await page.waitForTimeout(180);
+  const reducedCount = await page.evaluate(() => window.__visualDrawCalls);
+  await page.waitForTimeout(180);
+  expect(await page.evaluate(() => window.__visualDrawCalls)).toBe(reducedCount);
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await expect.poll(() => page.evaluate(() => window.__visualDrawCalls)).toBeGreaterThan(reducedCount);
+});
+
 test("WebGL context loss and restoration reinitialize the visual effect", async ({ page }) => {
   await page.addInitScript(() => {
     window.__visualDrawCalls = 0;
