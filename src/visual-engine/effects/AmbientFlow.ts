@@ -1,7 +1,7 @@
 import { createProgram } from "../shaders";
 import type { VisualEffectFactory } from "../types";
 
-const vertexShader = \`#version 300 es
+const vertexShader = `#version 300 es
 precision highp float;
 const vec2 POSITIONS[3] = vec2[3](
   vec2(-1.0, -1.0),
@@ -13,9 +13,9 @@ void main() {
   vec2 position = POSITIONS[gl_VertexID];
   vUv = position * 0.5 + 0.5;
   gl_Position = vec4(position, 0.0, 1.0);
-}\`;
+}`;
 
-const fragmentShader = \`#version 300 es
+const fragmentShader = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 outColor;
@@ -49,7 +49,7 @@ void main() {
   float vignette = 1.0 - smoothstep(0.25, 0.95, length((uv - 0.5) * aspect));
   color *= 0.72 + vignette * 0.28;
   outColor = vec4(color, 1.0);
-}\`;
+}`;
 
 export interface AmbientFlowOptions {
   motion?: number;
