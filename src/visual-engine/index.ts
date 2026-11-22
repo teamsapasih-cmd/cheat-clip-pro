@@ -8,3 +8,6 @@ export type {
   VisualRuntimeOptions,
 } from "./types";
 export { createAmbientFlowEffect } from "./effects/AmbientFlow";
+export { VisualControlPanel } from "./controls/VisualControlPanel";
+export { VisualWorkbench } from "./controls/VisualWorkbench";
+export { visualComponents, getVisualComponent, getDefaultValues, validateVisualValues } from "./registry";
