@@ -8,6 +8,7 @@ from backend.cloud.rate_limit import (
     consume_auth_limits,
     consume_user_limit,
     enforce_auth_rate_limit,
+    enforce_user_rate_limit,
 )
 
 
@@ -164,3 +165,31 @@ def test_user_quota_rejects_unknown_actions():
             window_seconds=60,
             key_secret="unit-test-secret-that-is-at-least-32-chars",
         )
+
+
+
+def test_user_rate_limit_fails_closed_when_redis_is_missing(monkeypatch):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "true")
+    monkeypatch.setenv("JWT_SECRET_KEY", "unit-test-secret-that-is-at-least-32-chars")
+
+    with pytest.raises(HTTPException) as error:
+        enforce_user_rate_limit(
+            action="analysis.enqueue",
+            user_id="user-1",
+            limit=3,
+            window_seconds=900,
+        )
+
+    assert error.value.status_code == 503
+
+
+def test_user_rate_limit_can_be_disabled_for_local_tests(monkeypatch):
+    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "false")
+    enforce_user_rate_limit(
+        action="analysis.enqueue",
+        user_id="user-1",
+        limit=3,
+        window_seconds=900,
+    )
