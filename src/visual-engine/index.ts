@@ -7,3 +7,4 @@ export type {
   VisualFrame,
   VisualRuntimeOptions,
 } from "./types";
+export { createAmbientFlowEffect } from "./effects/AmbientFlow";
