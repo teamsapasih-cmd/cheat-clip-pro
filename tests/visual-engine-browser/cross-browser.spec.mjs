@@ -17,8 +17,8 @@ test("Canvas 2D renderer draws and resizes in this browser engine", async ({ pag
   const canvas = page.getByRole("img", { name: "Canvas Aurora cross-browser preview" });
   await expect(canvas).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__canvas2dDrawCalls)).toBeGreaterThan(0);
-  await expect.poll(() => canvas.evaluate((node) => node.width)).toBeGreaterThan(0);
-  await expect.poll(() => canvas.evaluate((node) => node.height)).toBeGreaterThan(0);
+  await expect.poll(() => canvas.evaluate((node) => node.width)).toBeGreaterThan(300);
+  await expect.poll(() => canvas.evaluate((node) => node.height)).toBeGreaterThan(300);
   await expect(page.getByRole("status")).toBeHidden();
 
   const initialWidth = await canvas.evaluate((node) => node.width);
