@@ -12,6 +12,7 @@ from backend.cloud.factory import build_job_queue, build_object_storage
 from backend.database.dependencies import get_db_session
 from backend.database.models import Analysis, MediaAsset, User
 from backend.routers.auth import get_current_user
+from backend.cloud.rate_limit import enforce_user_rate_limit
 
 router = APIRouter(prefix="/api/analyses", tags=["Cloud Analysis"])
 
@@ -41,6 +42,7 @@ def create_analysis_job(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
+    enforce_user_rate_limit(action="analysis.enqueue", user_id=user.id, limit=3, window_seconds=900)
     media = db.scalar(
         select(MediaAsset).where(
             MediaAsset.id == body.media_asset_id,
