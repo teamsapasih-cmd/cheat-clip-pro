@@ -6,20 +6,26 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 ## First-party architecture
 
-- Runtime: owns WebGL2 context lifecycle, resize handling, device-pixel-ratio limits, animation scheduling, visibility pausing, reduced-motion behavior, pointer input, context-loss recovery, and cleanup.
-- Shader utilities: compile and link independently authored GLSL programs with explicit error reporting.
-- Effect contract: each visual is an isolated factory returning render, resize, and dispose hooks.
-- React surface: a small host component connects a visual effect to the application without coupling it to the clip-processing pipeline.
-- Future registry: metadata, categories, controls, presets, and variants are stored separately from renderers.
+- **WebGL2 runtime:** owns GPU context lifecycle, resize handling, device-pixel-ratio limits, animation scheduling, visibility pausing, reduced-motion behavior, pointer input, context-loss recovery, and cleanup.
+- **Canvas 2D runtime:** provides a lighter browser-native rendering path with matching sizing, animation, pointer, visibility, and cleanup behavior.
+- **Shader utilities:** compile and link independently authored GLSL programs with explicit error reporting and cleanup.
+- **Effect contracts:** each visual is an isolated renderer-specific factory returning render, resize, and dispose hooks.
+- **Registry:** renderer choice, metadata, categories, controls, presets, and tags are separate from the rendering surface.
+- **React workbench:** a small host connects visual effects to controls without coupling them to the clip-processing pipeline.
+
+## Current components
+
+1. **Ambient Flow** — procedural WebGL2 gradient field with motion, intensity, and pointer-response controls plus three presets.
+2. **Canvas Aurora** — layered Canvas 2D color field with pointer-responsive movement.
 
 ## Planned capabilities
 
-1. Procedural 2D and 3D visuals built with browser-native Canvas2D and WebGL2.
-2. Parameter controls with validated defaults and safe ranges.
-3. Reusable presets and variants implemented as first-party configurations.
-4. Theme-aware palettes, responsive sizing, and pointer interaction.
-5. Reduced-motion support, visibility pausing, and a visible unsupported-WebGL2 state. A Canvas2D fallback renderer remains planned.
-6. Lazy loading and per-effect resource cleanup.
+1. Expand the original component library with particles, grids, orbits, typography, and other visual families.
+2. Add validated color, range, toggle, and select controls where each effect needs them.
+3. Add exportable/importable configuration presets and a searchable category gallery.
+4. Add theme-aware palettes, responsive sizing, and accessibility checks.
+5. Add browser-level rendering, context-loss, reduced-motion, and performance tests.
+6. Add lazy loading and resource budgets before production integration.
 
 ## Non-goals
 
@@ -29,4 +35,4 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 ## Integration policy
 
-The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The current workbench is an exported module and is not mounted into the production app yet. A production build and browser-level GPU test are still required before integration.
+The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The workbench is exported as a module and is not mounted into the production app. No Railway deployment is made until build, lint, and browser/GPU checks pass.
