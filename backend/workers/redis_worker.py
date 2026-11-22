@@ -4,12 +4,12 @@ import asyncio, json, logging, os, shutil, socket, tempfile, time
 from functools import lru_cache
 from pathlib import Path
 from typing import Callable
-from threading import Event, Thread
 from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from backend.cloud.factory import build_object_storage
 from backend.cloud.settings import validate_production_configuration
 from backend.cloud.redis_queue import RedisStreamJobQueue
+from backend.workers.lease import start_job_heartbeat
 from backend.database.models import Analysis, MediaAsset, ExportedVideo
 from backend.database.session import build_engine, build_session_factory
 from backend.services.analysis_persistence import persist_analysis_result
@@ -17,28 +17,6 @@ from backend.services.retention import run_retention_sweep
 logger = logging.getLogger("clipstudio.worker")
 Handler = Callable[[dict[str, object]], None]
 
-
-def _start_job_heartbeat(queue, consumer: str, entry_id: str, interval_seconds: float):
-    """Keep a long-running Redis Streams entry owned by this worker."""
-    stop_event = Event()
-
-    def heartbeat_loop() -> None:
-        while not stop_event.wait(interval_seconds):
-            try:
-                if not queue.heartbeat(consumer, entry_id):
-                    logger.warning("Worker lease refresh returned no pending entry: %s", entry_id)
-            except Exception:
-                # A transient heartbeat error is observable but must not kill the
-                # actual job handler. Redis reclaim remains the crash-recovery path.
-                logger.exception("Could not refresh worker lease for entry %s", entry_id)
-
-    thread = Thread(
-        target=heartbeat_loop,
-        name=f"clipstudio-lease-{entry_id}",
-        daemon=True,
-    )
-    thread.start()
-    return stop_event, thread
 
 
 @lru_cache(maxsize=1)
@@ -165,7 +143,7 @@ def run_worker(handlers: dict[str, Handler] | None = None) -> None:
                     queue.update_progress(job_id, "cancelled", 100); queue.acknowledge(entry_id); continue
                 _set_analysis_state(payload, "processing"); queue.update_progress(job_id, "processing", 5)
                 heartbeat_interval = max(2.0, reclaim_idle_ms / 3000.0)
-                heartbeat_stop, heartbeat_thread = _start_job_heartbeat(
+                heartbeat_stop, heartbeat_thread = start_job_heartbeat(
                     queue, consumer, entry_id, heartbeat_interval
                 )
                 try:
