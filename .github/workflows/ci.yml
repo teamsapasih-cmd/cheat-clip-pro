@@ -5,9 +5,11 @@ on:
     branches:
       - master
       - clip-intelligence-upgrade
+      - cloud-worker-invocation-fix
   pull_request:
     branches:
       - master
+      - clip-intelligence-upgrade
 
 permissions:
   contents: read
