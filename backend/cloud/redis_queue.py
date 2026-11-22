@@ -52,6 +52,23 @@ class RedisStreamJobQueue:
         entries = result[1] if result and len(result) > 1 else []
         return [self._decode_entry(eid, fields) for eid, fields in entries]
 
+    def heartbeat(self, consumer: str, stream_entry_id: str) -> bool:
+        """Refresh a worker's pending-entry lease while its handler is still running.
+
+        Redis Streams considers a pending entry stale based on its idle time.
+        XCLAIM with a zero idle threshold reassigns it to the same consumer and
+        resets that timer, preventing another worker from reclaiming long jobs.
+        """
+        claimed = self.client.xclaim(
+            self.stream_key,
+            self.group_name,
+            consumer,
+            min_idle_time=0,
+            message_ids=[stream_entry_id],
+            justid=True,
+        )
+        return bool(claimed)
+
     def acknowledge(self, stream_entry_id: str) -> None:
         self.client.xack(self.stream_key, self.group_name, stream_entry_id)
 
