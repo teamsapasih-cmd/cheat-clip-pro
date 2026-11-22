@@ -1,51 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { mountVisualRuntime } from "./runtime";
-import type { VisualEffectFactory, VisualRuntimeOptions } from "./types";
-
-interface VisualSurfaceProps {
-  effect: VisualEffectFactory;
-  className?: string;
-  label?: string;
-  options?: VisualRuntimeOptions;
-}
-
-export function VisualSurface({
-  effect,
-  className,
-  label = "Animated visual",
-  options,
-}: VisualSurfaceProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [error, setError] = useState<string | null>(null);
-
+import { mountCanvas2DRuntime } from "./canvas2d-runtime";
+import type { Canvas2DEffectFactory, VisualEffectFactory, VisualRenderer, VisualRuntimeOptions } from "./types";
+interface VisualSurfaceProps { effect: VisualEffectFactory | Canvas2DEffectFactory; renderer?: VisualRenderer; className?: string; label?: string; options?: VisualRuntimeOptions; }
+export function VisualSurface({ effect, renderer = "webgl2", className, label = "Animated visual", options }: VisualSurfaceProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null); const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    setError(null);
-    try {
-      return mountVisualRuntime(canvas, effect, options);
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Visual preview could not start.";
-      setError(message);
-      console.error("[VisualSurface]", cause);
-      return undefined;
-    }
-  }, [effect, options]);
-
-  return (
-    <div className="visual-surface-host">
-      <canvas
-        ref={canvasRef}
-        className={className}
-        role="img"
-        aria-label={label}
-      />
-      {error && (
-        <div className="visual-surface-error" role="status">
-          Preview unavailable: {error}
-        </div>
-      )}
-    </div>
-  );
+    const canvas = canvasRef.current; if (!canvas) return;
+    let cleanup: (() => void) | undefined;
+    try { cleanup = renderer === "canvas2d" ? mountCanvas2DRuntime(canvas, effect as Canvas2DEffectFactory, options) : mountVisualRuntime(canvas, effect as VisualEffectFactory, options); setError(null); }
+    catch (cause) { const message = cause instanceof Error ? cause.message : "Visual preview could not start."; setError(message); console.error("[VisualSurface]", cause); }
+    return cleanup;
+  }, [effect, options, renderer]);
+  return <div className="visual-surface-host"><canvas ref={canvasRef} className={className} role="img" aria-label={label} />{error && <div className="visual-surface-error" role="status">Preview unavailable: {error}</div>}</div>;
 }
