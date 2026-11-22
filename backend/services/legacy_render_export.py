@@ -24,6 +24,12 @@ def _utc_iso(value: datetime | None) -> str | None:
     return normalized.isoformat()
 
 
+def assert_batch_owner(batch: dict, owner_id: str | None) -> None:
+    """Fail closed unless the render batch was created by this authenticated owner."""
+    if not owner_id or batch.get("owner_id") != owner_id:
+        raise PermissionError("Render batch does not belong to the authenticated user")
+
+
 def persist_legacy_batch_exports(
     db: Session,
     storage,
