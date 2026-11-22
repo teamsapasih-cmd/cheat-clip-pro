@@ -100,9 +100,13 @@ export function mountVisualRuntime(
   const onContextRestored = () => {
     effect?.dispose?.();
     effect = null;
-    initializeEffect();
-    previousTime = 0;
-    frameId = requestAnimationFrame(render);
+    try {
+      initializeEffect();
+      previousTime = 0;
+      frameId = requestAnimationFrame(render);
+    } catch (error) {
+      console.error("[VisualRuntime] Context restoration failed.", error);
+    }
   };
 
   const observer = new ResizeObserver(resize);
