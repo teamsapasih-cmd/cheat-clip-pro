@@ -84,7 +84,10 @@ def test_expired_export_object_is_deleted_and_record_is_preserved():
     assert result["exports_deleted"] == 1
     assert storage.deleted == ["users/u/exports/final.mp4"]
     db.refresh(export)
-    assert export.storage_deleted_at == now
+    deleted_at = export.storage_deleted_at
+    if deleted_at.tzinfo is None:  # SQLite drops timezone metadata for DateTime(timezone=True).
+        deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+    assert deleted_at == now
     assert db.get(ExportedVideo, export.id) is not None
     db.close()
 
