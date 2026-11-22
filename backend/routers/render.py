@@ -9,6 +9,7 @@ import zipfile
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.config import (
@@ -20,11 +21,12 @@ from backend.config import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.auth.tokens import decode_access_token
 from backend.cloud.factory import build_object_storage
 from backend.database.dependencies import get_db_session
 from backend.database.models import Project, User
 from backend.routers.auth import get_current_user
-from backend.services.legacy_render_export import persist_legacy_batch_exports
+from backend.services.legacy_render_export import assert_batch_owner, persist_legacy_batch_exports
 from backend.schemas.render import (
     RenderBatchRequest,
     RenderSettingsModel,
@@ -42,10 +44,26 @@ from backend.services.render_service import (
 )
 
 router = APIRouter(tags=["Render"])
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
+def _optional_owner_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> str | None:
+    if credentials is None:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    return str(payload["sub"])
 
 
 @router.post("/api/render-batch")
-async def start_batch_render(request: RenderBatchRequest, background_tasks: BackgroundTasks):
+async def start_batch_render(
+    request: RenderBatchRequest,
+    background_tasks: BackgroundTasks,
+    owner_id: str | None = Depends(_optional_owner_id),
+):
     if not request.clips:
         raise HTTPException(status_code=400, detail="No clips provided for rendering")
 
@@ -75,6 +93,7 @@ async def start_batch_render(request: RenderBatchRequest, background_tasks: Back
         })
         RENDER_BATCHES[batch_id] = {
             "batch_id": batch_id,
+            "owner_id": owner_id,
             "total_clips": 1,
             "current_clip_index": 0,
             "overall_status": "running",
@@ -328,6 +347,10 @@ def save_render_batch_to_cloud(
     """Save completed legacy render files into the user's private cloud storage."""
     batch = RENDER_BATCHES.get(batch_id)
     if batch is None:
+        raise HTTPException(status_code=404, detail="Render batch not found")
+    try:
+        assert_batch_owner(batch, user.id)
+    except PermissionError:
         raise HTTPException(status_code=404, detail="Render batch not found")
     project = db.scalar(
         select(Project).where(Project.id == project_id, Project.owner_id == user.id)
