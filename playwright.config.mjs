@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/visual-engine-browser",
@@ -22,7 +22,7 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium-desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1365, height: 900 } } },
-    { name: "chromium-mobile", use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" } },
+    { name: "chromium-mobile", use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } },
   ],
   webServer: {
     command: "npm run dev-frontend -- --host 127.0.0.1",
