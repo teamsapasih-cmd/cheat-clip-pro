@@ -196,6 +196,56 @@ def test_cloud_upload_requires_owned_project_and_verifies_object(client: TestCli
     assert hidden.status_code == 404
 
 
+def test_cloud_upload_size_mismatch_is_marked_for_cleanup(client: TestClient, monkeypatch):
+    import backend.routers.cloud_media as cloud_media
+
+    storage = FakeObjectStorage()
+    monkeypatch.setattr(cloud_media, "build_object_storage", lambda: storage)
+    account = register(client, "media-size-mismatch@example.com")
+    headers = {"Authorization": f"Bearer {account['access_token']}"}
+    project = client.post("/api/projects", headers=headers, json={"name": "Media project"}).json()
+    intent = client.post(
+        "/api/media/cloud/upload-intent",
+        headers=headers,
+        json={
+            "project_id": project["id"],
+            "filename": "clip.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 1024,
+        },
+    )
+    assert intent.status_code == 201
+    storage.expected_size = 512
+
+    rejected = client.post(
+        f"/api/media/cloud/{intent.json()['media_asset_id']}/complete",
+        headers=headers,
+    )
+    assert rejected.status_code == 400
+    retry = client.post(
+        f"/api/media/cloud/{intent.json()['media_asset_id']}/complete",
+        headers=headers,
+    )
+    assert retry.status_code == 409
+
+
+def test_cloud_upload_intent_rejects_size_over_server_limit(client: TestClient):
+    account = register(client, "media-too-large@example.com")
+    headers = {"Authorization": f"Bearer {account['access_token']}"}
+    project = client.post("/api/projects", headers=headers, json={"name": "Media project"}).json()
+    response = client.post(
+        "/api/media/cloud/upload-intent",
+        headers=headers,
+        json={
+            "project_id": project["id"],
+            "filename": "too-large.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 50 * 1024 * 1024 + 1,
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_cloud_upload_rejects_unsupported_content_type(client: TestClient, monkeypatch):
     import backend.routers.cloud_media as cloud_media
 
