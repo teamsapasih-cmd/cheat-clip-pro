@@ -18,6 +18,7 @@ from backend.routers.cloud_media import router as cloud_media_router
 @pytest.fixture()
 def client(monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-that-is-at-least-thirty-two-characters")
+    monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "false")
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
