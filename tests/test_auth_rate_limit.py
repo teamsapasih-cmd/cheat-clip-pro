@@ -73,6 +73,7 @@ def test_auth_limits_enforce_identity_threshold_across_ips():
             ip_limit=100,
             identity_limit=2,
             window_seconds=900,
+            key_secret="unit-test-secret-that-is-at-least-32-chars",
         ) is None
 
     assert consume_auth_limits(
@@ -97,6 +98,7 @@ def test_rate_limit_keys_do_not_store_raw_identity():
         ip_limit=10,
         identity_limit=5,
         window_seconds=900,
+        key_secret="unit-test-secret-that-is-at-least-32-chars",
     )
     assert all("private@example.com" not in key for key in redis.keys)
     assert all("203.0.113.10" not in key for key in redis.keys)
