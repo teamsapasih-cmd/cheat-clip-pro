@@ -8,10 +8,11 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 - **WebGL2 runtime:** owns GPU context lifecycle, resize handling, device-pixel-ratio limits, animation scheduling, visibility pausing, reduced-motion behavior, pointer input, context-loss recovery, and cleanup.
 - **Canvas 2D runtime:** provides a lighter browser-native rendering path with matching sizing, animation, pointer, visibility, and cleanup behavior.
+- **Resize compatibility:** uses `ResizeObserver` when available and falls back to window resize events on older environments.
 - **Shader utilities:** compile and link independently authored GLSL programs with explicit error reporting and cleanup.
 - **Effect contracts:** each visual is an isolated renderer-specific factory returning render, resize, and dispose hooks.
 - **Registry:** renderer choice, metadata, categories, controls, presets, and tags are separate from the rendering surface.
-- **React workbench:** a small host connects visual effects to controls without coupling them to the clip-processing pipeline.
+- **React workbench:** a small host connects visual effects to controls without coupling them to the clip-processing pipeline; runtime failures are surfaced through an accessible status message.
 
 ## Current components
 
