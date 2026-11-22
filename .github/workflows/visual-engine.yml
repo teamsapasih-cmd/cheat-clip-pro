@@ -1,0 +1,42 @@
+name: Independent Visual Engine CI
+
+on:
+  push:
+    branches: [visual-engine-cleanroom]
+    paths:
+      - "src/visual-engine/**"
+      - "tests/visual-engine-browser/**"
+      - "docs/INDEPENDENT-VISUAL-ENGINE.md"
+      - "playwright.config.mjs"
+      - ".github/workflows/visual-engine.yml"
+  pull_request:
+    paths:
+      - "src/visual-engine/**"
+      - "tests/visual-engine-browser/**"
+      - "docs/INDEPENDENT-VISUAL-ENGINE.md"
+      - "playwright.config.mjs"
+      - ".github/workflows/visual-engine.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-engine-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-engine:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx eslint src/visual-engine tests/visual-engine-browser
+      - run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright test --project=chromium-desktop --project=chromium-mobile
+      - run: npx playwright test --project=firefox-canvas2d --project=webkit-canvas2d
