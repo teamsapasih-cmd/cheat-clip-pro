@@ -19,7 +19,11 @@ export const visualComponents: VisualComponentDefinition[] = [
       { id: "balanced", name: "Balanced", description: "The default ambient appearance.", values: { motion: 0.55, intensity: 0.8, pointerResponse: true } },
       { id: "dynamic", name: "Dynamic", description: "More movement and stronger color contrast.", values: { motion: 0.9, intensity: 1, pointerResponse: true } },
     ],
-    createEffect: () => createAmbientFlowEffect,
+    createEffect: (values) => createAmbientFlowEffect({
+      motion: typeof values.motion === "number" ? values.motion : 0.55,
+      intensity: typeof values.intensity === "number" ? values.intensity : 0.8,
+      pointerResponse: typeof values.pointerResponse === "boolean" ? values.pointerResponse : true,
+    }),
   },
 ];
 
