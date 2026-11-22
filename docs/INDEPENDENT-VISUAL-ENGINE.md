@@ -22,7 +22,7 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 1. Expand the original component library with particles, grids, orbits, typography, and other visual families.
 2. Add validated color, range, toggle, and select controls where each effect needs them.
-3. Add exportable/importable configuration presets and a searchable category gallery.
+3. Add exportable/importable configuration presets and extend the searchable category gallery.
 4. Add theme-aware palettes, responsive sizing, and accessibility checks.
 5. Add browser-level rendering, context-loss, reduced-motion, and performance tests.
 6. Add lazy loading and resource budgets before production integration.
