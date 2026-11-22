@@ -52,7 +52,7 @@ def _persist_analysis_result(payload):
 
 async def _consume_analysis_stream(request, queue, job_id):
     from backend.routers.analyze import analyze_video
-    response = await analyze_video(request)
+    response = await analyze_video(request, None)
     buffer, final_result = "", None
     async for chunk in response.body_iterator:
         buffer += chunk.decode("utf-8", errors="replace") if isinstance(chunk, bytes) else str(chunk)
