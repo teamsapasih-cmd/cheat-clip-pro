@@ -132,6 +132,10 @@ export function CloudWorkspacePanel() {
 
   const uploadFile = async (file?: File) => {
     if (!file || !session || !selectedProject) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setError('This deployment currently accepts cloud uploads up to 50 MB per file.');
+      return;
+    }
     setBusy(true);
     setError('');
     setMessage('');
@@ -242,7 +246,7 @@ export function CloudWorkspacePanel() {
                 <div className="cloud-workspace-upload">
                   <UploadCloud size={24} />
                   <strong>Upload source video</strong>
-                  <span>MP4, MOV, WebM or MKV · maximum 2 GB</span>
+                  <span>MP4, MOV, WebM or MKV · maximum 50 MB</span>
                   <label className="cloud-workspace-file-button">
                     Choose video
                     <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska" disabled={busy || !selectedProject} onChange={(event) => {
