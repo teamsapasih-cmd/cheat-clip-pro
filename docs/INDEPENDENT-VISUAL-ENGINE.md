@@ -14,21 +14,21 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 - **Registry:** renderer choice, metadata, categories, controls, presets, and tags are separate from the rendering surface.
 - **React workbench:** a small host connects visual effects to controls without coupling them to the clip-processing pipeline; runtime failures are surfaced through an accessible status message.
 
-## Current components
+## Implemented components
 
 1. **Ambient Flow** — procedural WebGL2 gradient field with motion, intensity, and pointer-response controls plus three presets.
 2. **Canvas Aurora** — layered Canvas 2D color field with motion, intensity, and pointer-response controls plus three presets.
 3. **Particle Field** — procedural WebGL2 particle field with motion, intensity, and size controls plus three presets.
-4. **Portable configurations** — versioned JSON export/import with component validation and safe defaults. Users can download/import a local JSON file or reset controls; configurations are not persisted to browser storage or media storage.
+4. **Portable configurations** — versioned JSON export/import with component validation, 64 KB input limit, and safe defaults. Users can download/import a local JSON file or reset controls; configurations are not persisted to browser storage or media storage.
+5. **Interactive gallery/workbench** — searchable and category-filtered component gallery, live preview, responsive layout, and renderer-specific fallback.
 
-## Planned capabilities
+## Next development capabilities
 
-1. Expand the original component library with particles, grids, orbits, typography, and other visual families.
-2. Add validated color, range, toggle, and select controls where each effect needs them.
-3. Add exportable/importable configuration presets and extend the searchable category gallery.
-4. Add theme-aware palettes, responsive sizing, and accessibility checks.
-5. Add browser-level rendering, context-loss, reduced-motion, and performance tests.
-6. Add lazy loading and resource budgets before production integration.
+These are future enhancements, not part of the current implementation:
+1. Expand the original component library with grids, orbits, typography, and additional visual families.
+2. Add theme-aware palettes and additional accessibility checks.
+3. Add lazy loading and explicit GPU/resource budgets before production integration.
+4. Add optional reusable project-level presets only after a separate persistence/security design review.
 
 ## Non-goals
 
@@ -38,16 +38,34 @@ This implementation is authored independently for Clip Intelligence Studio. It d
 
 ## Integration policy
 
-The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The workbench is exported as a module and is not mounted into the production app. No Railway deployment is made until build, lint, and browser/GPU checks pass.
+The engine remains isolated from the existing Clip Intelligence Studio workflow and render pipeline. The workbench is exported as a module and is not mounted into the production app. No Railway deployment is made until build, lint, browser checks, and real-device GPU validation pass.
 
+## Automated browser validation
 
-## Browser validation
+The isolated browser harness lives in `tests/visual-engine-browser/` and runs against Vite without mounting the workbench into the production application. GitHub Actions installs Playwright browsers at job time without adding runtime dependencies or changing the application lockfile. Current automated coverage includes:
 
-The isolated browser harness lives in `tests/visual-engine-browser/` and runs against Vite without mounting the workbench into the production application. GitHub Actions installs Playwright and Chromium at job time (without adding runtime dependencies or changing the application lockfile), then validates:
 - WebGL2 Ambient Flow and Particle Field plus Canvas 2D Aurora rendering.
 - Search and category filtering.
-- Preset selection, range controls, reset, and JSON import/export.
+- Preset selection, range controls, reset, and JSON import/export, including oversized import rejection.
 - Responsive layout at desktop and mobile emulated viewports.
 - Canvas resize behavior.
+- Hidden-tab pause/resume and reduced-motion pause/resume.
+- WebGL context-loss recovery.
+- Renderer switching and disposal of the previous animation loop.
 
-CI uses Chromium's software WebGL implementation. This is useful for repeatable browser/API coverage but is not a substitute for real-device GPU, browser-vendor, thermal, or long-duration performance testing.
+The latest PR #2 CI run completed successfully: build, ESLint, Chromium desktop/mobile, Firefox Canvas 2D, and WebKit Canvas 2D. The CI browser runtime uses Chromium's software WebGL implementation. It provides repeatable API/browser coverage but is not a substitute for real-device GPU, browser-vendor, thermal, or long-duration performance testing.
+
+## Required manual release verification
+
+Complete this checklist on a non-production preview build before considering production integration:
+
+- [ ] Test WebGL2 on at least one physical desktop/laptop GPU in current Chrome or Edge.
+- [ ] Test WebGL2 on at least one physical mobile device with a supported browser.
+- [ ] Test Canvas 2D fallback on a browser/device where WebGL2 is unavailable or disabled.
+- [ ] Switch repeatedly between all effects; confirm no frozen canvas, stale animation, or steadily increasing resource use.
+- [ ] Resize, rotate, background/foreground the tab, and exercise reduced-motion settings.
+- [ ] Trigger context loss/recovery where the browser exposes the test extension; confirm graceful fallback if recovery fails.
+- [ ] Inspect console errors and GPU/process memory during a sustained preview session.
+- [ ] Confirm the preview remains isolated and does not change clip analysis, render, upload, or export workflows.
+
+Record browser/version, device/GPU, operating system, renderer used, and any observed errors with the verification result. Do not mark physical GPU validation complete based only on software WebGL CI.
