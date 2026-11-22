@@ -26,7 +26,7 @@ All counters are atomic Redis increments with expiry and action-specific keys. R
 
 ## Railway client-IP trust
 
-The production API is behind Railway's HTTP edge. Railway's public-networking documentation identifies `X-Real-IP` as the request header for the client's remote IP. The application reads only this header in Railway, validates it as an IP address, and accepts it only when the request host exactly matches the service's `RAILWAY_PUBLIC_DOMAIN`. It does not trust `X-Forwarded-For`. Outside Railway, tests and local development use the direct ASGI peer address.
+The production API is behind Railway's HTTP edge. Railway identifies the environment through `RAILWAY_ENVIRONMENT_NAME` (not `RAILWAY_ENVIRONMENT`), and provides `RAILWAY_PUBLIC_DOMAIN` for the service hostname. Railway's public-networking documentation identifies `X-Real-IP` as the request header for the client's remote IP. The application reads only this header in Railway, validates it as an IP address, and accepts it only when the request host exactly matches the service's `RAILWAY_PUBLIC_DOMAIN`. It does not trust `X-Forwarded-For`. Outside Railway, tests and local development use the direct ASGI peer address.
 
 This application-level resolver is intentional: the current Railway start command does not configure Uvicorn's forwarded-header trust list, and we do not need to enable broad forwarded-header trust to use Railway's documented client-IP header. If the Railway public domain or `X-Real-IP` is absent or invalid, protected IP-based routes fail closed with HTTP 503 instead of falling back to the shared proxy address.
 
