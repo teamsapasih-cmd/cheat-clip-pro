@@ -24,6 +24,9 @@ export function exportVisualConfiguration(configuration: VisualConfiguration): s
 }
 
 export function importVisualConfiguration(serialized: string): VisualConfiguration {
+  if (serialized.length > 65_536) {
+    throw new Error("Configuration file is too large (maximum 64 KB).");
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(serialized);
