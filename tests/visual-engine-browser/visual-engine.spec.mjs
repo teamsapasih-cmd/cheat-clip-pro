@@ -62,6 +62,13 @@ test("controls, presets, reset and JSON import/export work", async ({ page }) =>
   await expect(page.locator(".visual-control-message")).toContainText("Configuration imported.");
   await expect(motion).toHaveValue("0.2");
 
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "oversized-config.json",
+    mimeType: "application/json",
+    buffer: Buffer.alloc(65_537, 0x20),
+  });
+  await expect(page.locator(".visual-control-message")).toContainText("maximum 64 KB");
+
   await page.getByRole("button", { name: "Reset" }).click();
   await expect(page.locator(".visual-control-message")).toContainText("Controls reset to defaults.");
   await expect(motion).toHaveValue("0.55");
