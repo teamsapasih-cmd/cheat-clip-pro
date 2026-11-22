@@ -8,10 +8,11 @@ import uuid
 import zipfile
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.responses import FileResponse, StreamingResponse
 
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.config import (
     ACTIVE_ENCODER_NAME,
     EXPORTS_DIR,
@@ -62,8 +63,10 @@ def _optional_owner_id(
 async def start_batch_render(
     request: RenderBatchRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     owner_id: str | None = Depends(_optional_owner_id),
 ):
+    enforce_ip_rate_limit(http_request, action="legacy.render", limit=6, window_seconds=900)
     if not request.clips:
         raise HTTPException(status_code=400, detail="No clips provided for rendering")
 
@@ -157,8 +160,10 @@ async def cancel_batch_rendering_endpoint(batch_id: str):
 async def retry_batch_rendering(
     batch_id: str,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     body: Optional[RetryBatchRequest] = None
 ):
+    enforce_ip_rate_limit(http_request, action="legacy.render_retry", limit=4, window_seconds=900)
     if batch_id not in RENDER_BATCHES:
         raise HTTPException(status_code=404, detail="Batch not found")
     batch = RENDER_BATCHES[batch_id]
