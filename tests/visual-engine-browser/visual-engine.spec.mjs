@@ -10,7 +10,7 @@ async function expectPreviewHealthy(page, accessibleName) {
   await expect(canvas).toBeVisible();
   await expect.poll(() => canvas.evaluate((node) => node.width)).toBeGreaterThan(0);
   await expect.poll(() => canvas.evaluate((node) => node.height)).toBeGreaterThan(0);
-  await expect(page.getByRole("status").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
+  await expect(page.locator(".visual-control-message").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
 }
 
 test("renders all three effects using their respective renderer", async ({ page }) => {
@@ -59,11 +59,11 @@ test("controls, presets, reset and JSON import/export work", async ({ page }) =>
     mimeType: "application/json",
     buffer: Buffer.from(config),
   });
-  await expect(page.getByRole("status")).toContainText("Configuration imported.");
+  await expect(page.locator(".visual-control-message")).toContainText("Configuration imported.");
   await expect(motion).toHaveValue("0.2");
 
   await page.getByRole("button", { name: "Reset" }).click();
-  await expect(page.getByRole("status")).toContainText("Controls reset to defaults.");
+  await expect(page.locator(".visual-control-message")).toContainText("Controls reset to defaults.");
   await expect(motion).toHaveValue("0.55");
 });
 
@@ -149,5 +149,5 @@ test("WebGL context loss and restoration reinitialize the visual effect", async 
   test.skip(!supported, "WEBGL_lose_context is not available in this Chromium runtime.");
   const previousDrawCount = await page.evaluate(() => window.__visualDrawCalls);
   await expect.poll(() => page.evaluate(() => window.__visualDrawCalls), { timeout: 12000 }).toBeGreaterThan(previousDrawCount);
-  await expect(page.getByRole("status").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
+  await expect(page.locator(".visual-control-message").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
 });
