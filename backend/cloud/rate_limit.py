@@ -125,3 +125,90 @@ def enforce_auth_rate_limit(request: Request, *, action: str, identity: str) -> 
             detail="Too many authentication attempts. Please wait before trying again.",
             headers={"Retry-After": str(retry_after)},
         )
+
+
+_USER_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return {count, redis.call('TTL', KEYS[1])}
+"""
+
+
+def consume_user_limit(
+    redis_client: Redis,
+    *,
+    action: str,
+    user_id: str,
+    limit: int,
+    window_seconds: int,
+    key_secret: str,
+) -> int | None:
+    """Apply an atomic per-account quota without storing the raw account ID."""
+    if action not in {"analysis.enqueue", "media.upload_intent"}:
+        raise ValueError("Unsupported user rate-limit action")
+    if min(limit, window_seconds) < 1:
+        raise ValueError("Rate-limit values must be positive")
+    if len(key_secret) < 32:
+        raise ValueError("Rate-limit key secret must contain at least 32 characters")
+
+    digest = _digest(user_id.strip(), key_secret)
+    key = f"clipstudio:ratelimit:user:{action}:{digest}"
+    count, ttl = (int(value) for value in redis_client.eval(
+        _USER_LIMIT_SCRIPT, 1, key, window_seconds
+    ))
+    return max(1, ttl) if count > limit else None
+
+
+def enforce_user_rate_limit(
+    *,
+    action: str,
+    user_id: str,
+    limit: int,
+    window_seconds: int = 900,
+) -> None:
+    """Enforce a distributed quota for an authenticated account; fail closed."""
+    enabled = os.environ.get("AUTH_RATE_LIMIT_ENABLED", "true").strip().lower()
+    if enabled in {"0", "false", "no", "off"}:
+        return
+
+    redis_url = os.environ.get("REDIS_URL", "").strip()
+    key_secret = (
+        os.environ.get("AUTH_RATE_LIMIT_KEY", "").strip()
+        or os.environ.get("JWT_SECRET_KEY", "").strip()
+    )
+    if not redis_url or len(key_secret) < 32:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request protection is temporarily unavailable",
+        )
+
+    try:
+        client = Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        try:
+            retry_after = consume_user_limit(
+                client,
+                action=action,
+                user_id=user_id,
+                limit=limit,
+                window_seconds=window_seconds,
+                key_secret=key_secret,
+            )
+        finally:
+            client.close()
+    except (RedisError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Request protection is temporarily unavailable",
+        ) from exc
+
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Request quota exceeded. Please wait before trying again.",
+            headers={"Retry-After": str(retry_after)},
+        )
