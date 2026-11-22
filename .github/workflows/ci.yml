@@ -72,8 +72,8 @@ jobs:
       - name: Test cloud analysis job API
         run: python -m pytest -q tests/test_analysis_jobs_api.py
 
-      - name: Test Redis queue retries and worker leases
-        run: python -m pytest -q tests/test_redis_queue_reliability.py tests/test_worker_heartbeat.py
+      - name: Test Redis queue retries, worker leases, and worker analysis invocation
+        run: python -m pytest -q tests/test_redis_queue_reliability.py tests/test_worker_heartbeat.py tests/test_worker_analysis_invocation.py
 
       - name: Test retention policy, cloud export, and signed upload size enforcement
         run: python -m pytest -q tests/test_retention_policy.py tests/test_legacy_render_cloud_export.py tests/test_database_session.py tests/test_s3_upload_size.py
