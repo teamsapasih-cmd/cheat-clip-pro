@@ -55,7 +55,7 @@ def consume_auth_limits(
     prefix = f"clipstudio:ratelimit:auth:{action}"
     keys = [
         f"{prefix}:ip:{_digest(client_ip, key_secret)}",
-        f"{prefix}:identity:{_digest(identity.strip().lower(), key_secret)}",
+        f"{prefix}:identity-ip:{_digest(client_ip + chr(0) + identity.strip().lower(), key_secret)}",
     ]
     result = redis_client.eval(_INCREMENT_TWO_KEYS, 2, *keys, window_seconds)
     ip_count, identity_count, ttl = (int(value) for value in result)
