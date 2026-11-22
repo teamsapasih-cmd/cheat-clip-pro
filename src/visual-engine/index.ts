@@ -1,13 +1,10 @@
 export { VisualSurface } from "./VisualSurface";
 export { mountVisualRuntime } from "./runtime";
+export { mountCanvas2DRuntime } from "./canvas2d-runtime";
 export { createProgram, createShader } from "./shaders";
-export type {
-  VisualEffectFactory,
-  VisualEffectInstance,
-  VisualFrame,
-  VisualRuntimeOptions,
-} from "./types";
+export type { Canvas2DEffectFactory, Canvas2DEffectInstance, Canvas2DFrame, VisualEffectFactory, VisualEffectInstance, VisualFrame, VisualRenderer, VisualRuntimeOptions } from "./types";
 export { createAmbientFlowEffect } from "./effects/AmbientFlow";
+export { createCanvasAuroraEffect } from "./effects/CanvasAurora";
 export { VisualControlPanel } from "./controls/VisualControlPanel";
 export { VisualWorkbench } from "./controls/VisualWorkbench";
 export { visualComponents, getVisualComponent, getDefaultValues, validateVisualValues } from "./registry";
