@@ -6,6 +6,7 @@ unavailable, requests fail closed with 503 rather than silently losing limits.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 
 from fastapi import HTTPException, Request, status
@@ -24,8 +25,8 @@ return {ip_count, identity_count, math.max(ip_ttl, identity_ttl)}
 """
 
 
-def _digest(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+def _digest(value: str, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def consume_auth_limits(
@@ -37,6 +38,7 @@ def consume_auth_limits(
     ip_limit: int,
     identity_limit: int,
     window_seconds: int,
+    key_secret: str,
 ) -> int | None:
     """Increment IP and normalized-identity counters atomically.
 
@@ -47,11 +49,13 @@ def consume_auth_limits(
         raise ValueError("Unsupported authentication rate-limit action")
     if min(ip_limit, identity_limit, window_seconds) < 1:
         raise ValueError("Rate-limit values must be positive")
+    if len(key_secret) < 32:
+        raise ValueError("Rate-limit key secret must contain at least 32 characters")
 
     prefix = f"clipstudio:ratelimit:auth:{action}"
     keys = [
-        f"{prefix}:ip:{_digest(client_ip)}",
-        f"{prefix}:identity:{_digest(identity.strip().lower())}",
+        f"{prefix}:ip:{_digest(client_ip, key_secret)}",
+        f"{prefix}:identity:{_digest(identity.strip().lower(), key_secret)}",
     ]
     result = redis_client.eval(_INCREMENT_TWO_KEYS, 2, *keys, window_seconds)
     ip_count, identity_count, ttl = (int(value) for value in result)
@@ -68,6 +72,13 @@ def enforce_auth_rate_limit(request: Request, *, action: str, identity: str) -> 
 
     redis_url = os.environ.get("REDIS_URL", "").strip()
     if not redis_url:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication protection is temporarily unavailable",
+        )
+
+    key_secret = os.environ.get("AUTH_RATE_LIMIT_KEY", "").strip() or os.environ.get("JWT_SECRET_KEY", "").strip()
+    if len(key_secret) < 32:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication protection is temporarily unavailable",
@@ -98,6 +109,7 @@ def enforce_auth_rate_limit(request: Request, *, action: str, identity: str) -> 
                 ip_limit=ip_limit,
                 identity_limit=identity_limit,
                 window_seconds=window_seconds,
+                key_secret=key_secret,
             )
         finally:
             client.close()
