@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from backend.database.models import Base, User, Project, RenderJob, ExportedVideo
-from backend.services.legacy_render_export import persist_legacy_batch_exports
+from backend.services.legacy_render_export import assert_batch_owner, persist_legacy_batch_exports
 
 
 class FakeStorage:
@@ -93,3 +95,14 @@ def test_legacy_render_cloud_save_rejects_non_completed_batch(tmp_path: Path):
     except ValueError:
         pass
     db.close()
+
+
+def test_cloud_export_requires_batch_owner_binding():
+    batch = {"owner_id": "user-1"}
+    assert_batch_owner(batch, "user-1")
+    with pytest.raises(PermissionError):
+        assert_batch_owner(batch, "user-2")
+    with pytest.raises(PermissionError):
+        assert_batch_owner({}, "user-1")
+    with pytest.raises(PermissionError):
+        assert_batch_owner(batch, None)
