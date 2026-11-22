@@ -40,7 +40,21 @@ export const visualComponents: VisualComponentDefinition[] = [
   },
   {
     id: "canvas-aurora", name: "Canvas Aurora", category: "Backgrounds", description: "Soft layered color fields rendered with the native Canvas 2D API.", version: 1, renderer: "canvas2d",
-    tags: ["canvas2d", "aurora", "gradient", "lightweight"], controls: [], presets: [], createEffect: () => createCanvasAuroraEffect(),
+    tags: ["canvas2d", "aurora", "gradient", "lightweight"], controls: [
+      { type: "range", key: "motion", label: "Motion", min: 0, max: 1, step: 0.05, defaultValue: 0.55 },
+      { type: "range", key: "intensity", label: "Intensity", min: 0.2, max: 1, step: 0.05, defaultValue: 0.8 },
+      { type: "toggle", key: "pointerResponse", label: "Pointer response", defaultValue: true },
+    ],
+    presets: [
+      { id: "mist", name: "Mist", description: "Soft and slow ambient color movement.", values: { motion: 0.2, intensity: 0.55, pointerResponse: false } },
+      { id: "aurora", name: "Aurora", description: "Balanced layered light and movement.", values: { motion: 0.55, intensity: 0.8, pointerResponse: true } },
+      { id: "radiant", name: "Radiant", description: "Brighter color fields with more movement.", values: { motion: 0.9, intensity: 1, pointerResponse: true } },
+    ],
+    createEffect: (values) => createCanvasAuroraEffect({
+      motion: typeof values.motion === "number" ? values.motion : 0.55,
+      intensity: typeof values.intensity === "number" ? values.intensity : 0.8,
+      pointerResponse: typeof values.pointerResponse === "boolean" ? values.pointerResponse : true,
+    }),
   },
 ];
 export function getVisualComponent(id: string): VisualComponentDefinition | undefined { return visualComponents.find((component) => component.id === id); }
