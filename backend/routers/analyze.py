@@ -334,7 +334,11 @@ async def list_openrouter_models_endpoint(
 
 @router.post("/api/analyze")
 async def analyze_video(request: AnalyzeRequest, http_request: Request):
-    enforce_ip_rate_limit(http_request, action="legacy.analyze", limit=5, window_seconds=900)
+    # HTTP requests are rate-limited at the public route boundary. The internal
+    # Redis worker calls this analysis pipeline directly after validating the
+    # job owner and media record, so it intentionally has no HTTP request.
+    if http_request is not None:
+        enforce_ip_rate_limit(http_request, action="legacy.analyze", limit=5, window_seconds=900)
     """Stream real-time progress via Server-Sent Events, then deliver the final result."""
 
     async def stream():
