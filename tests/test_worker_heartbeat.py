@@ -1,6 +1,6 @@
 import time
 
-from backend.workers.redis_worker import _start_job_heartbeat
+from backend.workers.lease import start_job_heartbeat
 
 
 class FakeQueue:
@@ -14,7 +14,7 @@ class FakeQueue:
 
 def test_worker_heartbeat_runs_until_handler_finishes():
     queue = FakeQueue()
-    stop, thread = _start_job_heartbeat(queue, "worker-a", "entry-1", 0.01)
+    stop, thread = start_job_heartbeat(queue, "worker-a", "entry-1", 0.01)
 
     time.sleep(0.06)
     stop.set()
