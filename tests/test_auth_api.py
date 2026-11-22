@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import datetime, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.database.dependencies import get_db_session
-from backend.database.models import Base
+from backend.database.models import Base, ExportedVideo, MediaAsset, RenderJob
 from backend.routers.auth import router as auth_router
 from backend.routers.projects import router as projects_router
 from backend.routers.cloud_media import router as cloud_media_router
@@ -209,3 +210,47 @@ def test_cloud_upload_rejects_unsupported_content_type(client: TestClient, monke
         },
     )
     assert response.status_code == 415
+
+
+def test_project_delete_does_not_orphan_live_cloud_objects(client: TestClient):
+    account = register(client, "project-cloud-guard@example.com")
+    headers = {"Authorization": f"Bearer {account['access_token']}"}
+    project = client.post("/api/projects", headers=headers, json={"name": "Protected project"}).json()
+
+    db_gen = client.app.dependency_overrides[get_db_session]()
+    db = next(db_gen)
+    try:
+        media = MediaAsset(
+            project_id=project["id"],
+            owner_id=account["user"]["id"],
+            original_filename="source.mp4",
+            storage_key="users/u/source.mp4",
+            source_type="upload",
+            content_type="video/mp4",
+            size_bytes=1024,
+            status="uploaded",
+        )
+        db.add(media)
+        db.commit()
+        assert client.delete(f"/api/projects/{project['id']}", headers=headers).status_code == 409
+
+        media.storage_key = None
+        media.status = "expired"
+        render_job = RenderJob(owner_id=account["user"]["id"], project_id=project["id"], status="completed")
+        db.add(render_job)
+        db.flush()
+        export = ExportedVideo(
+            owner_id=account["user"]["id"],
+            render_job_id=render_job.id,
+            storage_key="users/u/exports/final.mp4",
+            filename="final.mp4",
+        )
+        db.add(export)
+        db.commit()
+        assert client.delete(f"/api/projects/{project['id']}", headers=headers).status_code == 409
+
+        export.storage_deleted_at = datetime.now(timezone.utc)
+        db.commit()
+        assert client.delete(f"/api/projects/{project['id']}", headers=headers).status_code == 204
+    finally:
+        db.close()
