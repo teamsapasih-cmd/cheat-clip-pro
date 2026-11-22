@@ -10,6 +10,7 @@ import uuid
 
 import pytest
 import requests
+from botocore.exceptions import ClientError
 
 from backend.cloud.s3_storage import S3ObjectStorage
 
@@ -19,6 +20,19 @@ pytestmark = pytest.mark.skipif(
     or os.environ.get("CLOUD_STORAGE_INTEGRATION") != "1",
     reason="Requires explicit opt-in to a non-production cloud storage environment",
 )
+
+
+def _assert_object_missing(storage: S3ObjectStorage, key: str) -> None:
+    try:
+        storage.get_metadata(key)
+    except ClientError as error:
+        code = str(error.response.get("Error", {}).get("Code", ""))
+        status_code = int(error.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0))
+        assert status_code == 404 or code in {"404", "NoSuchKey", "NotFound"}, (
+            f"Expected rejected upload object to be absent; storage returned {code or status_code}"
+        )
+        return
+    pytest.fail("Storage contains an object from a rejected oversized upload")
 
 
 def test_staging_storage_enforces_signed_content_length_and_cleanup():
@@ -47,7 +61,9 @@ def test_staging_storage_enforces_signed_content_length_and_cleanup():
             f"Staging provider rejected an exact-size signed PUT: "
             f"HTTP {exact_response.status_code}"
         )
-        assert storage.get_metadata(exact_key)["size_bytes"] == len(payload)
+        exact_metadata = storage.get_metadata(exact_key)
+        assert exact_metadata["size_bytes"] == len(payload)
+        assert exact_metadata["content_type"] == content_type
 
         oversized_url = storage.create_upload_url(
             oversized_key,
@@ -61,10 +77,17 @@ def test_staging_storage_enforces_signed_content_length_and_cleanup():
             headers={"Content-Type": content_type},
             timeout=30,
         )
-        assert not 200 <= oversized_response.status_code < 300, (
-            "Staging provider accepted a PUT whose Content-Length differs "
-            "from the signed size"
+        assert oversized_response.status_code in (400, 403, 411, 413), (
+            "Expected the provider to reject a body whose Content-Length differs "
+            f"from the signed size; received HTTP {oversized_response.status_code}"
         )
+        _assert_object_missing(storage, oversized_key)
     finally:
-        storage.delete(exact_key)
-        storage.delete(oversized_key)
+        cleanup_errors = []
+        for key in (exact_key, oversized_key):
+            try:
+                storage.delete(key)
+            except Exception as error:
+                cleanup_errors.append(f"{key}: {type(error).__name__}")
+        if cleanup_errors:
+            pytest.fail("Staging integration cleanup failed: " + "; ".join(cleanup_errors))
