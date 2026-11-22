@@ -3,6 +3,7 @@ from backend.cloud.redis_queue import RedisStreamJobQueue
 class FakeRedis:
     def __init__(self):
         self.streams, self.hashes, self.acked, self.dead, self.kv = {}, {}, [], [], set()
+        self.claimed = None
     def xgroup_create(self, *args, **kwargs): return None
     def xadd(self, stream, fields):
         self.streams.setdefault(stream, []).append(("1-0", dict(fields)))
@@ -12,6 +13,9 @@ class FakeRedis:
     def expire(self, *args): return True
     def hgetall(self, key): return self.hashes.get(key, {})
     def xack(self, stream, group, entry): self.acked.append(entry); return 1
+    def xclaim(self, stream, group, consumer, min_idle_time, message_ids, justid=False):
+        self.claimed = (stream, group, consumer, min_idle_time, message_ids, justid)
+        return message_ids
     def set(self, key, value, ex=None): self.kv.add(key); return True
     def exists(self, key): return key in self.kv
 
@@ -43,3 +47,18 @@ def test_max_attempts_moves_job_to_dead_letter():
     assert len(client.dead) == 1
     assert client.acked == ["old-2"]
     assert queue.get_progress("job-2")["status"] == "failed"
+
+
+def test_heartbeat_refreshes_pending_entry_for_same_consumer():
+    client = FakeRedis()
+    queue = RedisStreamJobQueue(client)
+
+    assert queue.heartbeat("worker-a", "1710000000000-0") is True
+    assert client.claimed == (
+        "clipstudio:jobs",
+        "clipstudio-workers",
+        "worker-a",
+        0,
+        ["1710000000000-0"],
+        True,
+    )
