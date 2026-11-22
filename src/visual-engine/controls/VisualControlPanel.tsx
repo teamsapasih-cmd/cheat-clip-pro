@@ -54,6 +54,7 @@ export function VisualControlPanel({ componentId, onValuesChange }: VisualContro
   const importConfiguration = async (file?: File) => {
     if (!file) return;
     try {
+      if (file.size > 65_536) throw new Error("Configuration file is too large (maximum 64 KB).");
       const configuration = importVisualConfiguration(await file.text());
       if (configuration.componentId !== componentId) {
         throw new Error("This file belongs to a different visual component.");
