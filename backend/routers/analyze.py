@@ -5,12 +5,13 @@ import os
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import StreamingResponse
 from google import genai
 from google.genai import types
 from pathlib import Path
 
+from backend.cloud.rate_limit import enforce_ip_rate_limit
 from backend.config import (
     TEMP_DIR,
     UPLOADS_DIR,
@@ -332,7 +333,8 @@ async def list_openrouter_models_endpoint(
 
 
 @router.post("/api/analyze")
-async def analyze_video(request: AnalyzeRequest):
+async def analyze_video(request: AnalyzeRequest, http_request: Request):
+    enforce_ip_rate_limit(http_request, action="legacy.analyze", limit=5, window_seconds=900)
     """Stream real-time progress via Server-Sent Events, then deliver the final result."""
 
     async def stream():
