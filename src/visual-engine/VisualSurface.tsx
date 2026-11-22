@@ -20,22 +20,27 @@ export function VisualSurface({ effect, renderer = "webgl2", className, label = 
     const errorNode = errorRef.current;
     if (!canvas) return;
 
-    if (errorNode) {
-      errorNode.hidden = true;
-      errorNode.textContent = "";
-    }
-
-    try {
-      return renderer === "canvas2d"
-        ? mountCanvas2DRuntime(canvas, effect as Canvas2DEffectFactory, options)
-        : mountVisualRuntime(canvas, effect as VisualEffectFactory, options);
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Visual preview could not start.";
+    const showError = (cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : "Visual preview could not continue.";
       if (errorNode) {
         errorNode.textContent = "Preview unavailable: " + message;
         errorNode.hidden = false;
       }
       console.error("[VisualSurface]", cause);
+    };
+
+    if (errorNode) {
+      errorNode.hidden = true;
+      errorNode.textContent = "";
+    }
+
+    const runtimeOptions = { ...options, onError: showError };
+    try {
+      return renderer === "canvas2d"
+        ? mountCanvas2DRuntime(canvas, effect as Canvas2DEffectFactory, runtimeOptions)
+        : mountVisualRuntime(canvas, effect as VisualEffectFactory, runtimeOptions);
+    } catch (cause) {
+      showError(cause);
       return undefined;
     }
   }, [effect, options, renderer]);
