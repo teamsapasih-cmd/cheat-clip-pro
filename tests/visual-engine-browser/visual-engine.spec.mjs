@@ -29,7 +29,7 @@ test("search and category filters narrow the component gallery", async ({ page }
   await expect(page.getByRole("button", { name: /Particle Field/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Ambient Flow/ })).toHaveCount(0);
   await page.getByRole("searchbox", { name: "Search visual components" }).fill("");
-  await page.getByRole("button", { name: "Backgrounds" }).click();
+  await page.getByRole("button", { name: "Backgrounds", exact: true }).click();
   await expect(page.getByRole("button", { name: /Ambient Flow/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Canvas Aurora/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Particle Field/ })).toHaveCount(0);
@@ -40,11 +40,8 @@ test("controls, presets, reset and JSON import/export work", async ({ page }) =>
   await expect(page.getByText("More movement and stronger color contrast.")).toBeVisible();
 
   const motion = page.locator('input[type="range"]').first();
-  await motion.evaluate((node) => {
-    node.value = "0.4";
-    node.dispatchEvent(new Event("input", { bubbles: true }));
-    node.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await motion.focus();
+  await motion.press("ArrowLeft");
   await expect(page.getByLabel("Preset")).toHaveValue("custom");
 
   const downloadPromise = page.waitForEvent("download");
