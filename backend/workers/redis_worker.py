@@ -127,7 +127,7 @@ def run_worker(handlers: dict[str, Handler] | None = None) -> None:
                 logger.exception("Retention sweep failed; it will retry next interval")
             finally:
                 next_retention_sweep = time.monotonic() + retention_interval
-        jobs = queue.claim_stale(consumer, min_idle_ms=reclaim_idle_ms, count=5)
+        jobs = queue.claim_stale(consumer, min_idle_ms=reclaim_idle_ms, count=1)
         if not jobs: jobs = queue.read(consumer=consumer, count=1, block_ms=5000)
         for job in jobs:
             entry_id, job_id = str(job["stream_entry_id"]), str(job["job_id"])
