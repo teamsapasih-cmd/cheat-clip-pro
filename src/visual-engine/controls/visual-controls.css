@@ -80,3 +80,29 @@
   .visual-control-row { align-items: flex-start; flex-direction: column; gap: .45rem; }
   .visual-control-range { width: 100%; }
 }
+
+.visual-control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.visual-control-actions button {
+  min-height: 34px;
+  padding: .4rem .65rem;
+  border: 1px solid var(--border-color, #e6eaf3);
+  border-radius: 9px;
+  background: var(--bg-surface-hover, #f4f6ff);
+  color: inherit;
+  font: inherit;
+  font-size: .72rem;
+  cursor: pointer;
+}
+.visual-control-actions button:hover {
+  border-color: var(--primary, #657cf6);
+}
+.visual-control-message {
+  min-height: 1rem;
+  margin: -.5rem 0 0;
+  color: var(--text-secondary, #65718a);
+  font-size: .7rem;
+}
