@@ -39,6 +39,15 @@ jobs:
       - name: Lint frontend modules
         run: npx eslint src/services/workspaceApi.ts src/components/CloudWorkspacePanel.tsx src/visual-engine
 
+      - name: Install browser test runner
+        run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+
+      - name: Install Chromium for browser tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Test visual engine in Chromium (desktop and mobile)
+        run: npx playwright test
+
   backend-tests:
     name: Backend syntax and cloud foundation tests
     runs-on: ubuntu-latest
