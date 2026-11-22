@@ -8,7 +8,8 @@ test.beforeEach(async ({ page }) => {
 async function expectPreviewHealthy(page, accessibleName) {
   const canvas = page.getByRole("img", { name: accessibleName });
   await expect(canvas).toBeVisible();
-  await expect(canvas).toHaveJSProperty("width", expect.any(Number));
+  await expect.poll(() => canvas.evaluate((node) => node.width)).toBeGreaterThan(0);
+  await expect.poll(() => canvas.evaluate((node) => node.height)).toBeGreaterThan(0);
   await expect(page.getByRole("status").filter({ hasText: "Preview unavailable" })).toHaveCount(0);
 }
 
@@ -39,7 +40,11 @@ test("controls, presets, reset and JSON import/export work", async ({ page }) =>
   await expect(page.getByText("More movement and stronger color contrast.")).toBeVisible();
 
   const motion = page.locator('input[type="range"]').first();
-  await motion.fill("0.4");
+  await motion.evaluate((node) => {
+    node.value = "0.4";
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   await expect(page.getByLabel("Preset")).toHaveValue("custom");
 
   const downloadPromise = page.waitForEvent("download");
@@ -83,7 +88,7 @@ test("canvas resizes with its preview container", async ({ page }) => {
   const canvas = page.getByRole("img", { name: "Ambient Flow visual preview" });
   const initial = await canvas.evaluate((node) => ({ width: node.width, height: node.height }));
   await page.setViewportSize({ width: 900, height: 900 });
-  await page.waitForTimeout(250);
+  await expect.poll(() => canvas.evaluate((node) => node.width)).not.toBe(initial.width);
   const resized = await canvas.evaluate((node) => ({ width: node.width, height: node.height }));
   expect(resized.width).toBeGreaterThan(0);
   expect(resized.height).toBeGreaterThan(0);
