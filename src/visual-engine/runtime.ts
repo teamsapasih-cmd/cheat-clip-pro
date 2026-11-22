@@ -63,10 +63,7 @@ export function mountVisualRuntime(
 
   const render = (timestamp: number) => {
     if (disposed) return;
-    if (config.pauseWhenHidden && document.visibilityState === "hidden") {
-      frameId = requestAnimationFrame(render);
-      return;
-    }
+    if (config.pauseWhenHidden && document.visibilityState === "hidden") return;
 
     const time = timestamp / 1000;
     const delta = previousTime === 0 ? 0 : Math.min(time - previousTime, 0.05);
