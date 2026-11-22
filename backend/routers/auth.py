@@ -1,7 +1,7 @@
 """Authentication endpoints backed by the durable user table."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from backend.auth.tokens import (
 )
 from backend.database.dependencies import get_db_session
 from backend.database.models import User
+from backend.cloud.rate_limit import enforce_auth_rate_limit
 from backend.schemas.identity import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -48,8 +49,9 @@ def get_current_user(
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db_session)):
+def register(request: Request, body: RegisterRequest, db: Session = Depends(get_db_session)):
     email = str(body.email).strip().lower()
+    enforce_auth_rate_limit(request, action="register", identity=email)
     if db.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
 
@@ -81,8 +83,9 @@ def register(body: RegisterRequest, db: Session = Depends(get_db_session)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db_session)):
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db_session)):
     email = str(body.email).strip().lower()
+    enforce_auth_rate_limit(request, action="login", identity=email)
     user = db.scalar(select(User).where(User.email == email))
     if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email or password is incorrect")
