@@ -33,6 +33,8 @@ class FakeStorage:
 @pytest.fixture()
 def client(monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-that-is-at-least-thirty-two-characters")
+    # Keep API tests deterministic; distributed rate-limit behavior is tested separately.
+    monkeypatch.setenv("AUTH_RATE_LIMIT_ENABLED", "false")
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
